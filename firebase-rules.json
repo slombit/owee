@@ -1,0 +1,33 @@
+{
+  "rules": {
+    "groups": {
+      "$groupId": {
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.hasChildren(['id', 'title', 'people', 'expenses', 'createdAt'])",
+        "title": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "people": {
+          "$personId": {
+            ".validate": "newData.hasChildren(['id', 'name'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            }
+          }
+        },
+        "expenses": {
+          "$expId": {
+            ".validate": "newData.hasChildren(['id', 'desc', 'amount', 'paidBy', 'splitWith'])",
+            "amount": {
+              ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 1000000"
+            },
+            "desc": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            }
+          }
+        }
+      }
+    }
+  }
+}

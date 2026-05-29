@@ -1,14 +1,15 @@
+// Las credenciales se leen del archivo .env (nunca se sube a GitHub)
 import { initializeApp } from 'firebase/app'
 import { getDatabase } from 'firebase/database'
 
 const firebaseConfig = {
-  apiKey:            "AIzaSyBBV82m45n2rzxgBVC2r8NzUbYXxxO9T6s",
-  authDomain:        "owee-496c4.firebaseapp.com",
-  databaseURL:       "https://owee-496c4-default-rtdb.firebaseio.com",
-  projectId:         "owee-496c4",
-  storageBucket:     "owee-496c4.firebasestorage.app",
-  messagingSenderId: "80254171699",
-  appId:             "1:80254171699:web:630b61d06249c555428146"
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL:       import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
 const app = initializeApp(firebaseConfig)

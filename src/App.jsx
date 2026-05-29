@@ -81,7 +81,7 @@ export default function App() {
 
   // ── Crear grupo ──────────────────────────────────────────────────────────────
   const createGroup = () => {
-    const name = newGroupName.trim() || "Nuevo grupo";
+    const name = sanitize(newGroupName, 60) || "Nuevo grupo";
     const g    = makeGroup(name);
     setGroups(prev => [...prev, g]);
     saveToFirebase(g);
@@ -95,8 +95,8 @@ export default function App() {
 
   // ── Unirse a grupo por código ────────────────────────────────────────────────
   const joinGroup = () => {
-    const code = joinCode.trim();
-    if (!code) return;
+    const code = joinCode.trim().replace(/[^a-z0-9]/gi, "").slice(0, 30);
+    if (!code || code.length < 5) { setJoinError("Código inválido."); return; }
     setJoinError("");
     const groupRef = ref(db, `groups/${code}`);
     onValue(groupRef, (snap) => {
@@ -147,8 +147,9 @@ export default function App() {
 
   // ── Personas ─────────────────────────────────────────────────────────────────
   const addPerson = () => {
-    const name = newPerson.trim();
+    const name = sanitize(newPerson, 40);
     if (!name || !active || active.people?.find(p => p.name === name)) return;
+    if ((active.people || []).length >= 20) return; // máximo 20 personas por grupo
     const idx = (active.people || []).length;
     updateActive(g => ({ ...g, people: [...(g.people || []), {
       id: genId(), name,
@@ -167,10 +168,13 @@ export default function App() {
   // ── Gastos ───────────────────────────────────────────────────────────────────
   const addExpense = () => {
     const { desc, amount, paidBy, splitWith } = newExp;
-    if (!desc.trim() || !amount || !paidBy || splitWith.length === 0) return;
+    const cleanDesc = sanitize(desc, 100);
+    const cleanAmt  = safeAmt(amount);
+    if (!cleanDesc || !cleanAmt || !paidBy || splitWith.length === 0) return;
+    if ((active.expenses || []).length >= 200) return; // máximo 200 gastos por grupo
     updateActive(g => ({ ...g, expenses: [...(g.expenses || []), {
-      id: genId(), desc: desc.trim(),
-      amount: parseFloat(amount),
+      id: genId(), desc: cleanDesc,
+      amount: cleanAmt,
       paidBy, splitWith, date: today()
     }]}));
     setNewExp({ desc: "", amount: "", paidBy: "", splitWith: [] });
@@ -452,9 +456,9 @@ export default function App() {
                 <div className="card" style={{ padding:20, marginBottom:20 }}>
                   <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Nuevo gasto</div>
                   <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                    <input placeholder="Descripción (pizza, taxi...)" value={newExp.desc} onChange={e => setNewExp(x=>({...x,desc:e.target.value}))} />
+                    <input placeholder="Descripción (pizza, taxi...)" value={newExp.desc} maxLength={100} onChange={e => setNewExp(x=>({...x,desc:e.target.value}))} />
                     <div style={{ display:"flex",gap:10 }}>
-                      <input type="number" placeholder="Monto $" value={newExp.amount} onChange={e => setNewExp(x=>({...x,amount:e.target.value}))} style={{ flex:1 }} min="0" />
+                      <input type="number" placeholder="Monto $" value={newExp.amount} max={999999} onChange={e => setNewExp(x=>({...x,amount:e.target.value}))} style={{ flex:1 }} min="0" />
                       <select value={newExp.paidBy} onChange={e => setNewExp(x=>({...x,paidBy:e.target.value}))} style={{ flex:1 }}>
                         <option value="">¿Quién pagó?</option>
                         {(active.people||[]).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -521,7 +525,7 @@ export default function App() {
                 <div className="card" style={{ padding:20,marginBottom:20 }}>
                   <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Agregar persona</div>
                   <div style={{ display:"flex",gap:10 }}>
-                    <input placeholder="Nombre" value={newPerson} onChange={e=>setNewPerson(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPerson()} style={{ flex:1 }} />
+                    <input placeholder="Nombre" value={newPerson} onChange={e=>setNewPerson(e.target.value)} maxLength={40} onKeyDown={e=>e.key==="Enter"&&addPerson()} style={{ flex:1 }} />
                     <button className="btn" onClick={addPerson} style={{ width:"auto",padding:"12px 20px" }}>+</button>
                   </div>
                 </div>
@@ -617,7 +621,7 @@ export default function App() {
           <div className="modal">
             <div style={{ fontWeight:800,fontSize:20,marginBottom:6 }}>Nuevo grupo</div>
             <div style={{ fontSize:13,color:"#bbb",marginBottom:20 }}>Dale un nombre para identificarlo</div>
-            <input placeholder='Ej: "Asado", "Viaje a Colonia"...' value={newGroupName}
+            <input placeholder='Ej: "Asado", "Viaje a Colonia"...' value={newGroupName} maxLength={60}
               onChange={e=>setNewGroupName(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&createGroup()}
               autoFocus style={{ marginBottom:14 }} />
