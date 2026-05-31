@@ -27,6 +27,21 @@ const makeGroup = (title="Nuevo grupo", currency="UYU", createdBy=null) => ({
 const auth     = getAuth();
 const gProvider= new GoogleAuthProvider();
 
+// ── Logo SVG ─────────────────────────────────────────────────────────────────
+const OweeLogo = ({ size = 40, dark = false }) => (
+  <svg width={size * 3.2} height={size} viewBox="0 0 128 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* O */}
+    <text x="0" y="32" fontFamily="'DM Sans', Arial Black, sans-serif" fontWeight="800" fontSize="36" fill={dark ? "white" : "#1a1a1a"} letterSpacing="-2">Owee</text>
+  </svg>
+);
+
+const OweeLogomark = ({ size = 40 }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="40" height="40" rx="10" fill="#1a1a1a"/>
+    <text x="20" y="28" textAnchor="middle" fontFamily="'DM Sans', Arial Black, sans-serif" fontWeight="900" fontSize="18" fill="white" letterSpacing="-0.5">Ow</text>
+  </svg>
+);
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function App() {
   // Auth
@@ -47,6 +62,7 @@ export default function App() {
   const [newPerson,     setNewPerson]     = useState("");
   const [newExp,        setNewExp]        = useState({ desc:"", amount:"", paidBy:"", splitWith:[] });
   const [copied,        setCopied]        = useState(false);
+  const [copiedCode,    setCopiedCode]    = useState(false);
   const [editTitle,     setEditTitle]     = useState(false);
   const [titleInput,    setTitleInput]    = useState("");
   const [showNewModal,  setShowNewModal]  = useState(false);
@@ -408,8 +424,9 @@ export default function App() {
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
         .su{animation:slideUp 0.3s ease forwards;}
       `}</style>
-      <div style={{ padding:"60px 24px 0", textAlign:"center" }}>
-        <div style={{ fontSize:52, fontWeight:800, letterSpacing:"-2px", color:"#1a1a1a" }}>Owee</div>
+      <div style={{ padding:"60px 24px 0", textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center" }}>
+        <OweeLogomark size={56} />
+        <div style={{ fontSize:42, fontWeight:800, letterSpacing:"-2px", color:"#1a1a1a", marginTop:16, lineHeight:1 }}>Owee</div>
         <div style={{ fontSize:15, color:"#bbb", marginTop:8, marginBottom:40 }}>Dividí gastos sin drama</div>
       </div>
       <div className="su" style={{ background:"white", borderRadius:"24px 24px 0 0", padding:"32px 24px 48px", boxShadow:"0 -4px 40px rgba(0,0,0,0.08)" }}>
@@ -496,9 +513,10 @@ export default function App() {
           <div style={{ padding:"56px 24px 28px", background:"#1a1a1a", borderRadius:"0 0 28px 28px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
               <div>
-                <div style={{ display:"flex", alignItems:"flex-end", gap:8, marginBottom:4 }}>
-                  <h1 style={{ fontSize:36, fontWeight:800, color:"white", letterSpacing:"-1.5px", lineHeight:1 }}>Owee</h1>
-                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.28)", marginBottom:5 }}>by patro</span>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+                  <OweeLogomark size={32} />
+                  <h1 style={{ fontSize:32, fontWeight:800, color:"white", letterSpacing:"-1.5px", lineHeight:1 }}>Owee</h1>
+                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.28)", marginTop:4 }}>by patro</span>
                 </div>
                 <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>Dividí gastos sin drama</div>
               </div>
@@ -580,7 +598,13 @@ export default function App() {
                   {active.title}
                 </div>
               )}
-              <div style={{ fontSize:11,color:"#bbb",marginBottom:2,fontFamily:"monospace",letterSpacing:0.5 }}>🔑 {active.id}</div>
+              <div className="row" style={{ gap:8, marginBottom:2 }}>
+                <div style={{ fontSize:11,color:"#bbb",fontFamily:"monospace",letterSpacing:0.5 }}>🔑 {active.id}</div>
+                <button onClick={()=>{ navigator.clipboard?.writeText(active.id).then(()=>{ setCopiedCode(true); setTimeout(()=>setCopiedCode(false),2000); }).catch(()=>{ const ta=document.createElement("textarea");ta.value=active.id;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.focus();ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),2000); }); }}
+                  style={{ background:copiedCode?"#4CAF82":"#f0f0ed", border:"none", borderRadius:6, padding:"3px 8px", fontSize:11, fontWeight:700, cursor:"pointer", color:copiedCode?"white":"#888", transition:"all 0.2s" }}>
+                  {copiedCode?"✓ copiado":"copiar"}
+                </button>
+              </div>
               <div style={{ fontSize:13,color:"#bbb",marginBottom:16 }}>
                 {(active.people||[]).length} personas · {curSymbol}{totalGastos(active).toFixed(2)} · {active.currency||"UYU"}
                 {ratesLoading&&<span style={{ marginLeft:6,fontSize:11 }}>↻ cargando cambio...</span>}
