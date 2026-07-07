@@ -63,6 +63,7 @@ export default function App() {
   const [newExp,        setNewExp]        = useState({ desc:"", amount:"", paidBy:"", splitWith:[] });
   const [copied,        setCopied]        = useState(false);
   const [copiedCode,    setCopiedCode]    = useState(false);
+  const [showAllPaid,   setShowAllPaid]   = useState(false);
   const [editTitle,     setEditTitle]     = useState(false);
   const [titleInput,    setTitleInput]    = useState("");
   const [showNewModal,  setShowNewModal]  = useState(false);
@@ -240,6 +241,16 @@ export default function App() {
 
   const removeExpense = (eid) => updateActive(g => ({ ...g, expenses:(g.expenses||[]).filter(e=>e.id!==eid) }));
   const toggleSplit   = (pid)  => setNewExp(e => ({ ...e, splitWith:e.splitWith.includes(pid)?e.splitWith.filter(i=>i!==pid):[...e.splitWith,pid] }));
+
+  const toggleSettlement = (key) => {
+    updateActive(g => ({
+      ...g,
+      paidSettlements: {
+        ...(g.paidSettlements||{}),
+        [key]: !(g.paidSettlements||{})[key]
+      }
+    }));
+  };
 
   // ── Cálculos ─────────────────────────────────────────────────────────────────
   const getBalances = (group) => {
@@ -750,7 +761,14 @@ export default function App() {
                 </div>
 
                 <div className="card" style={{ padding:20,marginBottom:16 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>¿Quién paga a quién?</div>
+                  <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
+                    <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase" }}>¿Quién paga a quién?</div>
+                    {settlements.length>0&&(
+                      <div style={{ fontSize:11,color:"#bbb" }}>
+                        {settlements.filter((_,i)=>(active.paidSettlements||{})[`${i}`]).length}/{settlements.length} pagados
+                      </div>
+                    )}
+                  </div>
                   {settlements.length===0?(
                     <div style={{ fontSize:14,color:"#bbb",textAlign:"center",padding:"16px 0" }}>
                       {(active.people||[]).length===0?"Agregá personas y gastos":"✓ Todos al día"}
@@ -759,23 +777,39 @@ export default function App() {
                     const from=getPerson(active,s.from);
                     const to  =getPerson(active,s.to);
                     if (!from||!to) return null;
+                    const key=`${i}`;
+                    const paid=(active.paidSettlements||{})[key];
                     return (
-                      <div key={i} style={{ background:"#f7f7f5",borderRadius:14,padding:"12px 14px",marginBottom:8 }}>
+                      <div key={i} style={{ background:paid?"#f0faf5":"#f7f7f5",borderRadius:14,padding:"12px 14px",marginBottom:8,transition:"background 0.3s",border:paid?"1.5px solid #c8eedd":"1.5px solid transparent" }}>
                         <div className="row" style={{ justifyContent:"space-between",marginBottom:6 }}>
                           <div className="row" style={{ gap:8 }}>
                             <Avatar name={from.name} color={from.color} bg={from.bg} size={26}/>
-                            <span style={{ fontSize:14,fontWeight:600 }}>{from.name}</span>
+                            <span style={{ fontSize:14,fontWeight:600,textDecoration:paid?"line-through":"none",color:paid?"#aaa":"#1a1a1a" }}>{from.name}</span>
                           </div>
-                          <span style={{ fontWeight:800,fontSize:17 }}>{curSymbol}{s.amount.toFixed(2)}</span>
+                          <div className="row" style={{ gap:10 }}>
+                            <span style={{ fontWeight:800,fontSize:17,color:paid?"#aaa":"#1a1a1a",textDecoration:paid?"line-through":"none" }}>{curSymbol}{s.amount.toFixed(2)}</span>
+                            <button onClick={()=>toggleSettlement(key)}
+                              style={{ width:28,height:28,borderRadius:"50%",border:`2px solid ${paid?"#4CAF82":"#ddd"}`,background:paid?"#4CAF82":"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s" }}>
+                              {paid&&<span style={{ color:"white",fontSize:14,fontWeight:700 }}>✓</span>}
+                            </button>
+                          </div>
                         </div>
                         <div className="row" style={{ gap:6,paddingLeft:4 }}>
                           <span style={{ fontSize:12,color:"#bbb" }}>→ para</span>
                           <Avatar name={to.name} color={to.color} bg={to.bg} size={20}/>
-                          <span style={{ fontSize:13,fontWeight:600,color:"#555" }}>{to.name}</span>
+                          <span style={{ fontSize:13,fontWeight:600,color:paid?"#aaa":"#555" }}>{to.name}</span>
                         </div>
+                        {paid&&(
+                          <div style={{ fontSize:11,color:"#4CAF82",fontWeight:600,marginTop:6,paddingLeft:4 }}>✓ Pagado</div>
+                        )}
                       </div>
                     );
                   })}
+                  {settlements.length>0&&settlements.every((_,i)=>(active.paidSettlements||{})[`${i}`])&&(
+                    <div style={{ textAlign:"center",padding:"12px 0 4px",fontSize:14,fontWeight:700,color:"#4CAF82" }}>
+                      🎉 ¡Todos los pagos completados!
+                    </div>
+                  )}
                 </div>
 
                 {/* Conversión de moneda */}
