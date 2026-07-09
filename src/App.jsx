@@ -53,12 +53,18 @@ const CURRENCIES = [
 const CHART_COLORS = ["#1a1a1a","#4A90D9","#E8734A","#4CAF82","#9B59B6","#E74C3C","#F39C12","#16A085","#e91e8c","#555"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const genId     = () => Math.random().toString(36).slice(2,11) + Math.random().toString(36).slice(2,11) + Date.now().toString(36);
+const genId      = () => Math.random().toString(36).slice(2,11) + Math.random().toString(36).slice(2,11) + Date.now().toString(36);
+const genGroupCode = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sin O/0/I/1 para evitar confusión
+  let code = "";
+  for (let i=0; i<6; i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+};
 const today     = () => new Date().toLocaleDateString("es-UY");
 const sanitize  = (str, max=80) => String(str||"").trim().slice(0,max);
 const safeAmt   = (val) => { const n=parseFloat(val); return (!isNaN(n)&&n>0&&n<1000000)?n:null; };
 const makeGroup = (title="Nuevo grupo", currency="UYU", createdBy=null) => ({
-  id: genId(), title, people:[], expenses:[], createdAt:today(), closed:false, currency, createdBy
+  id: genGroupCode(), title, people:[], expenses:[], createdAt:today(), closed:false, currency, createdBy
 });
 
 const auth     = getAuth();
@@ -276,8 +282,8 @@ export default function App() {
   };
 
   const joinGroup = () => {
-    const code = joinCode.trim().replace(/[^a-z0-9]/gi,"").slice(0,50);
-    if (!code||code.length<3) { setJoinError("Código inválido."); return; }
+    const code = joinCode.trim().toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,20);
+    if (!code||code.length<4) { setJoinError("Código inválido."); return; }
     setJoinError("");
     const groupRef = ref(db, `groups/${code}`);
     onValue(groupRef, (snap) => {
@@ -1054,7 +1060,7 @@ export default function App() {
           <div className="modal" style={{ background:T.surface }}>
             <div style={{ fontWeight:800,fontSize:20,marginBottom:6,color:T.text }}>Unirse a un grupo</div>
             <div style={{ fontSize:13,color:"#bbb",marginBottom:20 }}>Pedile el código a quien creó el grupo</div>
-            <input placeholder="Código del grupo" value={joinCode} onChange={e=>{setJoinCode(e.target.value);setJoinError("");}} onKeyDown={e=>e.key==="Enter"&&joinGroup()} autoFocus style={{ marginBottom:joinError?8:14,fontFamily:"monospace",letterSpacing:1 }}/>
+            <input placeholder="Código del grupo (6 caracteres)" value={joinCode} onChange={e=>{setJoinCode(e.target.value.toUpperCase());setJoinError("");}} onKeyDown={e=>e.key==="Enter"&&joinGroup()} autoFocus style={{ marginBottom:joinError?8:14,fontFamily:"monospace",letterSpacing:1 }}/>
             {joinError&&<div style={{ fontSize:13,color:"#E8734A",marginBottom:14 }}>{joinError}</div>}
             <button className="btn" onClick={joinGroup}>Unirme</button>
             <button onClick={()=>{setShowJoinModal(false);setJoinError("");}} style={{ background:"none",border:"none",width:"100%",padding:"14px",fontSize:14,color:"#bbb",cursor:"pointer",marginTop:4 }}>Cancelar</button>
