@@ -184,44 +184,54 @@ export default function App() {
   }, [user]);
 
   // ── Tipo de cambio ──────────────────────────────────────────────────────────
+  // Tasas de referencia (julio 2026), se usan si las APIs en vivo fallan
   const FALLBACK_RATES = {
-    UYU: { USD:0.026, ARS:970, BRL:0.135, EUR:0.024, UYU:1 },
-    USD: { UYU:38.5,  ARS:975, BRL:5.15,  EUR:0.92,  USD:1 },
-    ARS: { UYU:0.04,  USD:0.001, BRL:0.005, EUR:0.001, ARS:1 },
-    BRL: { UYU:7.5,   USD:0.19,  ARS:189,   EUR:0.18,  BRL:1 },
-    EUR: { UYU:41.5,  USD:1.08,  ARS:1055,  BRL:5.6,   EUR:1 },
+    UYU: { UYU:1,     USD:0.0243, ARS:26.8,  BRL:0.138, EUR:0.0225 },
+    USD: { UYU:41.2,  USD:1,      ARS:1103,  BRL:5.68,  EUR:0.925  },
+    ARS: { UYU:0.0373, USD:0.000907, ARS:1,  BRL:0.00515, EUR:0.000838 },
+    BRL: { UYU:7.25,  USD:0.176,  ARS:194,   BRL:1,     EUR:0.163  },
+    EUR: { UYU:44.5,  USD:1.081,  ARS:1192,  BRL:6.14,  EUR:1      },
   };
 
   const fetchRates = useCallback(async (baseCurrency="UYU") => {
-    if (rates[baseCurrency]) return;
     setRatesLoading(true);
-    let loaded = false;
+    let result = null;
+
+    // Intento 1: frankfurter.app (rápido, pero no siempre tiene todas las monedas)
     try {
-      const res = await fetch(`https://open.er-api.com/v6/latest/${baseCurrency}`);
+      const res = await fetch(`https://api.frankfurter.app/latest?from=${baseCurrency}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.rates) { setRates(prev => ({ ...prev, [baseCurrency]: data.rates })); loaded = true; }
+        if (data?.rates) result = { ...data.rates, [baseCurrency]: 1 };
       }
     } catch {}
-    if (!loaded) {
+
+    // Intento 2: exchangerate-api (más monedas, incluye UYU/ARS)
+    if (!result || Object.keys(result).length < 3) {
       try {
-        const res2 = await fetch(`https://api.exchangerate-api.com/v4/latest/${baseCurrency}`);
+        const res2 = await fetch(`https://open.er-api.com/v6/latest/${baseCurrency}`);
         if (res2.ok) {
           const data2 = await res2.json();
-          if (data2.rates) { setRates(prev => ({ ...prev, [baseCurrency]: data2.rates })); loaded = true; }
+          if (data2?.rates) result = data2.rates;
         }
       } catch {}
     }
-    if (!loaded && FALLBACK_RATES[baseCurrency]) {
-      setRates(prev => ({ ...prev, [baseCurrency]: FALLBACK_RATES[baseCurrency] }));
+
+    // Fallback final: tasas fijas de referencia
+    if (!result && FALLBACK_RATES[baseCurrency]) {
+      result = FALLBACK_RATES[baseCurrency];
+    }
+
+    if (result) {
+      setRates(prev => ({ ...prev, [baseCurrency]: result }));
     }
     setRatesLoading(false);
-  }, [rates]);
+  }, []);
 
   const convertAmount = (amount, fromCurrency, toCurrency) => {
     if (fromCurrency === toCurrency) return amount;
-    const baseRates = rates[fromCurrency];
-    if (!baseRates || !baseRates[toCurrency]) return amount;
+    const baseRates = rates[fromCurrency] || FALLBACK_RATES[fromCurrency];
+    if (!baseRates || !baseRates[toCurrency]) return null;
     return amount * baseRates[toCurrency];
   };
 
@@ -933,7 +943,7 @@ export default function App() {
                       <div style={{ padding:"16px 0",textAlign:"center",color:T.textMuted,fontSize:13 }}>Cargando tasas...</div>
                     ):CURRENCIES.filter(c=>c.code!==(active.currency||"UYU")).map(c=>{
                       const converted=convertAmount(totalGastos(active),active.currency||"UYU",c.code);
-                      const hasRate=rates[active.currency||"UYU"]?.[c.code];
+                      const isLive=!!(rates[active.currency||"UYU"]?.[c.code]);
                       return (
                         <div key={c.code} className="row" style={{ justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${T.border}` }}>
                           <div>
@@ -941,14 +951,20 @@ export default function App() {
                             <div style={{ fontSize:11,color:T.textMuted }}>{c.code}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
-                            <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{c.symbol}{converted.toFixed(2)}</div>
-                            {!hasRate&&<div style={{ fontSize:10,color:T.textMuted }}>aprox.</div>}
+                            {converted===null?(
+                              <div style={{ fontWeight:600,fontSize:13,color:T.textMuted }}>no disponible</div>
+                            ):(
+                              <>
+                                <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{c.symbol}{converted.toFixed(2)}</div>
+                                {!isLive&&<div style={{ fontSize:10,color:T.textMuted }}>referencia</div>}
+                              </>
+                            )}
                           </div>
                         </div>
                       );
                     })}
                     <div style={{ fontSize:11,color:T.textMuted,marginTop:10 }}>
-                      {Object.keys(rates).length>0?"Tasas en tiempo real":"Tasas aproximadas"}
+                      {Object.keys(rates).length>0?"Tasas en tiempo real cuando están disponibles":"Tasas de referencia"}
                     </div>
                   </div>
                 )}
