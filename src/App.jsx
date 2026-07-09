@@ -51,6 +51,37 @@ const CURRENCIES = [
   { code:"EUR", symbol:"€",  name:"Euro" },
 ];
 const CHART_COLORS = ["#1a1a1a","#4A90D9","#E8734A","#4CAF82","#9B59B6","#E74C3C","#F39C12","#16A085","#e91e8c","#555"];
+const CATEGORIES = [
+  { code:"comida",     label:"Comida",      icon:"🍕" },
+  { code:"transporte", label:"Transporte",  icon:"🚗" },
+  { code:"alojamiento",label:"Alojamiento", icon:"🏠" },
+  { code:"entretenimiento", label:"Entretenimiento", icon:"🎉" },
+  { code:"compras",    label:"Compras",     icon:"🛍️" },
+  { code:"salud",      label:"Salud",       icon:"💊" },
+  { code:"otro",       label:"Otro",        icon:"📦" },
+];
+const getCategory = (code) => CATEGORIES.find(c=>c.code===code) || CATEGORIES[CATEGORIES.length-1];
+
+// ── Cloudinary (para fotos de recibo) ─────────────────────────────────────────
+// Completá con tus datos de Cloudinary (ver guía)
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "";
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "";
+
+const uploadReceipt = async (file) => {
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+    throw new Error("Cloudinary no está configurado todavía.");
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error("Error al subir la imagen.");
+  const data = await res.json();
+  return data.secure_url;
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const genId      = () => Math.random().toString(36).slice(2,11) + Math.random().toString(36).slice(2,11) + Date.now().toString(36);
@@ -135,7 +166,11 @@ export default function App() {
   const [activeId,      setActiveId]      = useState(null);
   const [tab,           setTab]           = useState("gastos");
   const [newPerson,     setNewPerson]     = useState("");
-  const [newExp,        setNewExp]        = useState({ desc:"", amount:"", paidBy:"", splitWith:[] });
+  const [newExp,        setNewExp]        = useState({ desc:"", amount:"", paidBy:"", splitWith:[], category:"otro", receiptUrl:null });
+  const [editingExpId,  setEditingExpId]  = useState(null);
+  const [uploadingImg,  setUploadingImg]  = useState(false);
+  const [uploadError,   setUploadError]   = useState("");
+  const [viewReceipt,   setViewReceipt]   = useState(null);
   const [copied,        setCopied]        = useState(false);
   const [copiedCode,    setCopiedCode]    = useState(false);
   const [showAllPaid,   setShowAllPaid]   = useState(false);
@@ -342,20 +377,57 @@ export default function App() {
   }));
 
   // ── Gastos ──────────────────────────────────────────────────────────────────
+  const resetExpForm = () => {
+    setNewExp({ desc:"", amount:"", paidBy:"", splitWith:[], category:"otro", receiptUrl:null });
+    setEditingExpId(null);
+    setUploadError("");
+  };
+
   const addExpense = () => {
     const cleanDesc = sanitize(newExp.desc, 100);
     const cleanAmt  = safeAmt(newExp.amount);
-    const { paidBy, splitWith } = newExp;
+    const { paidBy, splitWith, category, receiptUrl } = newExp;
     if (!cleanDesc||!cleanAmt||!paidBy||splitWith.length===0) return;
-    if ((active.expenses||[]).length>=200) return;
-    updateActive(g => ({ ...g, expenses:[...(g.expenses||[]), {
-      id:genId(), desc:cleanDesc, amount:cleanAmt, paidBy, splitWith, date:today(), addedBy:user?.uid||null
-    }] }));
-    setNewExp({ desc:"", amount:"", paidBy:"", splitWith:[] });
+
+    if (editingExpId) {
+      updateActive(g => ({ ...g, expenses:(g.expenses||[]).map(e => e.id===editingExpId ? {
+        ...e, desc:cleanDesc, amount:cleanAmt, paidBy, splitWith, category:category||"otro", receiptUrl:receiptUrl||null
+      } : e) }));
+    } else {
+      if ((active.expenses||[]).length>=200) return;
+      updateActive(g => ({ ...g, expenses:[...(g.expenses||[]), {
+        id:genId(), desc:cleanDesc, amount:cleanAmt, paidBy, splitWith, date:today(), addedBy:user?.uid||null,
+        category:category||"otro", receiptUrl:receiptUrl||null
+      }] }));
+    }
+    resetExpForm();
   };
 
-  const removeExpense = (eid) => updateActive(g => ({ ...g, expenses:(g.expenses||[]).filter(e=>e.id!==eid) }));
-  const toggleSplit   = (pid)  => setNewExp(e => ({ ...e, splitWith:e.splitWith.includes(pid)?e.splitWith.filter(i=>i!==pid):[...e.splitWith,pid] }));
+  const startEditExpense = (exp) => {
+    setNewExp({ desc:exp.desc, amount:String(exp.amount), paidBy:exp.paidBy, splitWith:exp.splitWith, category:exp.category||"otro", receiptUrl:exp.receiptUrl||null });
+    setEditingExpId(exp.id);
+    window.scrollTo({ top:0, behavior:"smooth" });
+  };
+
+  const removeExpense = (eid) => {
+    updateActive(g => ({ ...g, expenses:(g.expenses||[]).filter(e=>e.id!==eid) }));
+    if (editingExpId===eid) resetExpForm();
+  };
+  const toggleSplit = (pid) => setNewExp(e => ({ ...e, splitWith:e.splitWith.includes(pid)?e.splitWith.filter(i=>i!==pid):[...e.splitWith,pid] }));
+
+  const handleReceiptUpload = async (file) => {
+    if (!file) return;
+    if (file.size > 8*1024*1024) { setUploadError("La imagen es muy pesada (máx 8MB)."); return; }
+    setUploadingImg(true); setUploadError("");
+    try {
+      const url = await uploadReceipt(file);
+      setNewExp(x => ({ ...x, receiptUrl:url }));
+    } catch (e) {
+      setUploadError(e.message || "Error al subir la foto.");
+    } finally {
+      setUploadingImg(false);
+    }
+  };
 
   const toggleSettlement = (key) => {
     updateActive(g => ({
@@ -752,13 +824,20 @@ export default function App() {
             {/* GASTOS */}
             {tab==="gastos"&&(
               <div className="fi">
-                <div className="card" style={{ padding:20,marginBottom:20 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Nuevo gasto</div>
+                <div className="card" style={{ padding:20,marginBottom:20, border:editingExpId?`2px solid ${T.text}`:`1.5px solid ${T.border}` }}>
+                  <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
+                    <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase" }}>
+                      {editingExpId?"Editando gasto":"Nuevo gasto"}
+                    </div>
+                    {editingExpId&&(
+                      <button onClick={resetExpForm} style={{ background:"none",border:"none",fontSize:12,color:T.orange,cursor:"pointer",fontWeight:600 }}>Cancelar</button>
+                    )}
+                  </div>
                   <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                     <input placeholder="Descripción (pizza, taxi...)" value={newExp.desc} onChange={e=>setNewExp(x=>({...x,desc:e.target.value}))} maxLength={100}/>
                     <div style={{ display:"flex",gap:10 }}>
                       <div style={{ flex:1,position:"relative" }}>
-                        <span style={{ position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:14,color:"#999",pointerEvents:"none" }}>{curSymbol}</span>
+                        <span style={{ position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:14,color:T.textMuted,pointerEvents:"none" }}>{curSymbol}</span>
                         <input type="number" placeholder="0.00" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:e.target.value}))} style={{ paddingLeft:30 }} min="0" max="999999"/>
                       </div>
                       <select value={newExp.paidBy} onChange={e=>setNewExp(x=>({...x,paidBy:e.target.value}))} style={{ flex:1 }}>
@@ -766,13 +845,26 @@ export default function App() {
                         {(active.people||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
+
+                    <div>
+                      <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>Categoría:</div>
+                      <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+                        {CATEGORIES.map(c=>(
+                          <button key={c.code} onClick={()=>setNewExp(x=>({...x,category:c.code}))} className="pill"
+                            style={{ padding:"6px 12px",fontSize:12,background:newExp.category===c.code?T.text:T.surface,color:newExp.category===c.code?T.bg:T.text,borderColor:newExp.category===c.code?T.text:T.border2 }}>
+                            {c.icon} {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {(active.people||[]).length>0&&(
                       <div>
-                        <div style={{ fontSize:12,color:"#bbb",marginBottom:8 }}>Dividir entre:</div>
+                        <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>Dividir entre:</div>
                         <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
                           {(active.people||[]).map(p=>(
                             <button key={p.id} onClick={()=>toggleSplit(p.id)} className="pill"
-                              style={{ padding:"6px 14px",fontSize:13,background:newExp.splitWith.includes(p.id)?"#1a1a1a":"white",color:newExp.splitWith.includes(p.id)?"white":"#1a1a1a",borderColor:newExp.splitWith.includes(p.id)?"#1a1a1a":"#e8e8e5" }}>
+                              style={{ padding:"6px 14px",fontSize:13,background:newExp.splitWith.includes(p.id)?T.text:T.surface,color:newExp.splitWith.includes(p.id)?T.bg:T.text,borderColor:newExp.splitWith.includes(p.id)?T.text:T.border2 }}>
                               {p.name}
                             </button>
                           ))}
@@ -780,8 +872,27 @@ export default function App() {
                         </div>
                       </div>
                     )}
+
+                    <div>
+                      <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>Foto del recibo (opcional):</div>
+                      {newExp.receiptUrl?(
+                        <div style={{ position:"relative", display:"inline-block" }}>
+                          <img src={newExp.receiptUrl} alt="recibo" style={{ width:80,height:80,objectFit:"cover",borderRadius:12,border:`1.5px solid ${T.border}` }}/>
+                          <button onClick={()=>setNewExp(x=>({...x,receiptUrl:null}))}
+                            style={{ position:"absolute",top:-6,right:-6,background:T.orange,color:"white",border:"none",borderRadius:"50%",width:20,height:20,fontSize:11,cursor:"pointer" }}>✕</button>
+                        </div>
+                      ):(
+                        <label style={{ display:"inline-flex",alignItems:"center",gap:8,padding:"10px 16px",border:`1.5px dashed ${T.border2}`,borderRadius:12,cursor:"pointer",fontSize:13,color:T.textSub }}>
+                          {uploadingImg?"Subiendo...":"📷 Agregar foto"}
+                          <input type="file" accept="image/*" capture="environment" style={{ display:"none" }}
+                            onChange={e=>handleReceiptUpload(e.target.files?.[0])} disabled={uploadingImg}/>
+                        </label>
+                      )}
+                      {uploadError&&<div style={{ fontSize:12,color:T.orange,marginTop:6 }}>{uploadError}</div>}
+                    </div>
+
                     <button className="btn" onClick={addExpense} disabled={(active.people||[]).length===0} style={{ marginTop:4 }}>
-                      {(active.people||[]).length===0?"Primero agregá personas":"Agregar gasto"}
+                      {(active.people||[]).length===0?"Primero agregá personas":editingExpId?"Guardar cambios":"Agregar gasto"}
                     </button>
                   </div>
                 </div>
@@ -792,21 +903,34 @@ export default function App() {
                   ):[...(active.expenses||[])].reverse().map(exp=>{
                     const payer=getPerson(active,exp.paidBy);
                     const share=(exp.amount/exp.splitWith.length).toFixed(2);
+                    const cat=getCategory(exp.category);
                     return (
                       <motion.div key={exp.id} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-40}} transition={{duration:0.2}}>
                       <SwipeToDelete T={T} onDelete={()=>{ haptic(); removeExpense(exp.id); }}>
                       <div style={{ padding:"16px 18px", background:T.surface, borderRadius:20, border:`1.5px solid ${T.border}` }}>
-                        <div className="row" style={{ justifyContent:"space-between" }}>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontWeight:700,fontSize:15,marginBottom:4,color:T.text }}>{exp.desc}</div>
-                            <div className="row" style={{ gap:8 }}>
-                              {payer&&<Avatar name={payer.name} color={payer.color} bg={payer.bg} size={18}/>}
-                              <span style={{ fontSize:12,color:T.textSub }}>pagó {payer?.name} · ÷{exp.splitWith.length} = {curSymbol}{share} c/u</span>
+                        <div className="row" style={{ justifyContent:"space-between", alignItems:"flex-start" }}>
+                          <div style={{ flex:1, display:"flex", gap:10 }}>
+                            {exp.receiptUrl&&(
+                              <img src={exp.receiptUrl} alt="recibo" onClick={()=>setViewReceipt(exp.receiptUrl)}
+                                style={{ width:44,height:44,objectFit:"cover",borderRadius:10,flexShrink:0,cursor:"pointer",border:`1.5px solid ${T.border}` }}/>
+                            )}
+                            <div style={{ flex:1 }}>
+                              <div className="row" style={{ gap:6, marginBottom:4 }}>
+                                <span style={{ fontSize:13 }}>{cat.icon}</span>
+                                <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{exp.desc}</div>
+                              </div>
+                              <div className="row" style={{ gap:8 }}>
+                                {payer&&<Avatar name={payer.name} color={payer.color} bg={payer.bg} size={18}/>}
+                                <span style={{ fontSize:12,color:T.textSub }}>pagó {payer?.name} · ÷{exp.splitWith.length} = {curSymbol}{share} c/u</span>
+                              </div>
                             </div>
                           </div>
-                          <div className="row" style={{ gap:10 }}>
+                          <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
                             <span style={{ fontWeight:800,fontSize:18,color:T.text }}>{curSymbol}{exp.amount.toFixed(2)}</span>
-                            <button onClick={()=>removeExpense(exp.id)} style={{ background:"none",border:"none",fontSize:16,color:"#ddd",cursor:"pointer" }}>✕</button>
+                            <div className="row" style={{ gap:8 }}>
+                              <button onClick={()=>startEditExpense(exp)} style={{ background:"none",border:"none",fontSize:13,color:T.textMuted,cursor:"pointer" }}>✎</button>
+                              <button onClick={()=>removeExpense(exp.id)} style={{ background:"none",border:"none",fontSize:14,color:T.textMuted,cursor:"pointer" }}>✕</button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1065,6 +1189,16 @@ export default function App() {
             <button className="btn" onClick={joinGroup}>Unirme</button>
             <button onClick={()=>{setShowJoinModal(false);setJoinError("");}} style={{ background:"none",border:"none",width:"100%",padding:"14px",fontSize:14,color:"#bbb",cursor:"pointer",marginTop:4 }}>Cancelar</button>
           </div>
+        </div>
+      )}
+
+      {/* MODAL: Ver recibo */}
+      {viewReceipt&&(
+        <div className="modal-bg fi" onClick={()=>setViewReceipt(null)} style={{ alignItems:"center", padding:20 }}>
+          <img src={viewReceipt} alt="recibo" onClick={e=>e.stopPropagation()}
+            style={{ maxWidth:"100%", maxHeight:"85vh", borderRadius:16, objectFit:"contain" }}/>
+          <button onClick={()=>setViewReceipt(null)}
+            style={{ position:"fixed", top:24, right:24, background:"rgba(0,0,0,0.6)", color:"white", border:"none", borderRadius:"50%", width:36, height:36, fontSize:18, cursor:"pointer" }}>✕</button>
         </div>
       )}
 
