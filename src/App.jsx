@@ -653,7 +653,7 @@ export default function App() {
                           {(g.people||[]).length>6&&<div style={{ width:28,height:28,borderRadius:"50%",background:"#f0f0ed",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#999",fontWeight:700 }}>+{g.people.length-6}</div>}
                           {(g.people||[]).length===0&&<div style={{ fontSize:12,color:"#bbb" }}>Sin personas</div>}
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -816,7 +816,7 @@ export default function App() {
                             <button onClick={()=>removePerson(p.id)} style={{ background:"none",border:"none",fontSize:16,color:"#ddd",cursor:"pointer" }}>✕</button>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
