@@ -1,7 +1,44 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { db } from "./firebase.js";
 import { ref, onValue, set, remove } from "firebase/database";
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
+
+// ── Theme tokens ──────────────────────────────────────────────────────────────
+const LIGHT = {
+  bg:        "#f7f7f5",
+  surface:   "white",
+  border:    "#f0f0ed",
+  border2:   "#e8e8e5",
+  text:      "#1a1a1a",
+  textSub:   "#888",
+  textMuted: "#bbb",
+  header:    "#1a1a1a",
+  headerText:"white",
+  input:     "white",
+  rowBg:     "#f7f7f5",
+  green:     "#4CAF82",
+  orange:    "#E8734A",
+  paidBg:    "#f0faf5",
+  paidBorder:"#c8eedd",
+};
+const DARK = {
+  bg:        "#0f0f13",
+  surface:   "#1a1a24",
+  border:    "#2a2a38",
+  border2:   "#333344",
+  text:      "#f0ede8",
+  textSub:   "#888",
+  textMuted: "#555",
+  header:    "#1a1a24",
+  headerText:"#f0ede8",
+  input:     "#13131c",
+  rowBg:     "#13131c",
+  green:     "#4CAF82",
+  orange:    "#E8734A",
+  paidBg:    "#0d1f17",
+  paidBorder:"#1a4030",
+};
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const COLORS  = ["#1a1a1a","#555","#4A90D9","#E8734A","#4CAF82","#9B59B6","#E74C3C","#F39C12","#16A085","#e91e8c"];
@@ -26,6 +63,38 @@ const makeGroup = (title="Nuevo grupo", currency="UYU", createdBy=null) => ({
 
 const auth     = getAuth();
 const gProvider= new GoogleAuthProvider();
+
+// ── SwipeToDelete ────────────────────────────────────────────────────────────
+const SwipeToDelete = ({ onDelete, children, T }) => {
+  const [offsetX, setOffsetX]   = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef(null);
+  const THRESHOLD = 80;
+
+  const onTouchStart = (e) => { startX.current = e.touches[0].clientX; setDragging(true); };
+  const onTouchMove  = (e) => {
+    if (startX.current===null) return;
+    const dx = e.touches[0].clientX - startX.current;
+    if (dx < 0) setOffsetX(Math.max(dx, -120));
+  };
+  const onTouchEnd = () => {
+    if (offsetX < -THRESHOLD) { onDelete(); }
+    setOffsetX(0); setDragging(false); startX.current=null;
+  };
+
+  return (
+    <div style={{ position:"relative", overflow:"hidden", borderRadius:20 }}>
+      <div style={{ position:"absolute", right:0, top:0, bottom:0, background:"#E8734A", display:"flex", alignItems:"center", justifyContent:"center", paddingRight:20, paddingLeft:10, borderRadius:"0 20px 20px 0", minWidth:80 }}>
+        <span style={{ color:"white", fontWeight:700, fontSize:13 }}>Eliminar</span>
+      </div>
+      <div
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+        style={{ transform:`translateX(${offsetX}px)`, transition:dragging?"none":"transform 0.3s cubic-bezier(.4,0,.2,1)", position:"relative", zIndex:1, background:T.surface, borderRadius:20 }}>
+        {children}
+      </div>
+    </div>
+  );
+};
 
 // ── Logo SVG ─────────────────────────────────────────────────────────────────
 const OweeLogo = ({ size = 40, dark = false }) => (
@@ -64,6 +133,18 @@ export default function App() {
   const [copied,        setCopied]        = useState(false);
   const [copiedCode,    setCopiedCode]    = useState(false);
   const [showAllPaid,   setShowAllPaid]   = useState(false);
+  const [darkMode,      setDarkMode]      = useState(() => {
+    try { return localStorage.getItem("owee-dark")==="1"; } catch { return false; }
+  });
+
+  const T = darkMode ? DARK : LIGHT;
+
+  useEffect(() => {
+    try { localStorage.setItem("owee-dark", darkMode?"1":"0"); } catch {}
+    document.body.style.background = darkMode ? DARK.bg : LIGHT.bg;
+  }, [darkMode]);
+
+  const haptic = () => { try { if (navigator.vibrate) navigator.vibrate(10); } catch {} };
   const [editTitle,     setEditTitle]     = useState(false);
   const [titleInput,    setTitleInput]    = useState("");
   const [showNewModal,  setShowNewModal]  = useState(false);
@@ -486,42 +567,37 @@ export default function App() {
 
   // ── App principal ─────────────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth:430, margin:"0 auto", minHeight:"100vh", background:"#f7f7f5", position:"relative" }}>
+    <div style={{ maxWidth:430, margin:"0 auto", minHeight:"100vh", background:T.bg, position:"relative", transition:"background 0.3s" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,700;9..40,800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;font-family:'DM Sans',-apple-system,sans-serif;}
-        input,select{background:white;border:1.5px solid #e8e8e5;color:#1a1a1a;border-radius:14px;padding:12px 14px;font-size:14px;outline:none;width:100%;transition:border 0.15s;}
-        input:focus,select:focus{border-color:#1a1a1a;}
-        input::placeholder{color:#bbb;}
-        select option{background:white;}
-        .pill{border:1.5px solid #e8e8e5;background:white;color:#1a1a1a;border-radius:50px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;}
-        .pill:hover{border-color:#1a1a1a;}
-        .btn{background:#1a1a1a;color:white;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;width:100%;transition:opacity 0.15s;}
+        input,select{background:${T.input};border:1.5px solid ${T.border2};color:${T.text};border-radius:14px;padding:12px 14px;font-size:14px;outline:none;width:100%;transition:border 0.15s;}
+        input:focus,select:focus{border-color:${T.text};}
+        input::placeholder{color:${T.textMuted};}
+        select option{background:${T.input};}
+        .pill{border:1.5px solid ${T.border2};background:${T.surface};color:${T.text};border-radius:50px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;}
+        .pill:hover{border-color:${T.text};}
+        .btn{background:${T.text};color:${T.bg};border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;width:100%;transition:opacity 0.15s;}
         .btn:active{opacity:0.8;}
         .btn:disabled{opacity:0.3;}
-        .card{background:white;border-radius:20px;border:1.5px solid #f0f0ed;}
+        .card{background:${T.surface};border-radius:20px;border:1.5px solid ${T.border};}
         .row{display:flex;align-items:center;}
-        .press{transition:transform 0.12s cubic-bezier(.4,0,.2,1);cursor:pointer;}
-        .press:active{transform:scale(0.97);}
-        @keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-        .su{animation:slideUp 0.25s cubic-bezier(.4,0,.2,1) forwards;}
-        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-        .fi{animation:fadeIn 0.2s ease;}
-        @keyframes scaleIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}
-        .si{animation:scaleIn 0.2s cubic-bezier(.4,0,.2,1);}
-        .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:flex-end;justify-content:center;z-index:200;backdrop-filter:blur(2px);}
-        .modal{background:white;border-radius:24px 24px 0 0;padding:28px 24px 44px;width:100%;max-width:430px;}
-        .sync{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:white;border-radius:50px;padding:7px 16px;font-size:12px;font-weight:700;z-index:300;opacity:0.9;white-space:nowrap;}
+        .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;z-index:200;backdrop-filter:blur(4px);}
+        .modal{background:${T.surface};border-radius:24px 24px 0 0;padding:28px 24px 44px;width:100%;max-width:430px;}
+        .sync{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:${T.text};color:${T.bg};border-radius:50px;padding:7px 16px;font-size:12px;font-weight:700;z-index:300;opacity:0.9;white-space:nowrap;}
         ::-webkit-scrollbar{display:none;}
-        .tab-bar{display:flex;position:sticky;top:0;background:white;z-index:10;border-bottom:1px solid #f0f0ed;}
+        .tab-bar{display:flex;position:sticky;top:0;background:${T.surface};z-index:10;border-bottom:1px solid ${T.border};}
+        .swipe-wrap{position:relative;overflow:hidden;border-radius:20px;}
+        .swipe-delete{position:absolute;right:0;top:0;bottom:0;background:#E8734A;display:flex;align-items:center;justify-content:center;padding:0 20px;color:white;font-weight:700;font-size:13px;border-radius:0 20px 20px 0;}
       `}</style>
 
-      {syncing && <div className="sync">⟳ Guardando...</div>}
+      {syncing && <motion.div className="sync" initial={{opacity:0,scale:0.9}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.9}}>⟳ Guardando...</motion.div>}
+      <AnimatePresence mode="wait">
 
       {/* ══ HOME ══════════════════════════════════════════════════════════════ */}
       {screen==="home" && (
-        <div className="su" style={{ paddingBottom:60 }}>
-          <div style={{ padding:"56px 24px 28px", background:"#1a1a1a", borderRadius:"0 0 28px 28px" }}>
+        <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-12}} transition={{duration:0.22,ease:[0.4,0,0.2,1]}} style={{ paddingBottom:60 }}>
+          <div style={{ padding:"56px 24px 28px", background:T.header, borderRadius:"0 0 28px 28px", transition:"background 0.3s" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
               <div>
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
@@ -531,9 +607,15 @@ export default function App() {
                 </div>
                 <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>Dividí gastos sin drama</div>
               </div>
-              <button onClick={()=>setShowProfile(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
-                <Avatar name={user.displayName||user.email} photo={user.photoURL} size={38} color="#fff" bg="rgba(255,255,255,0.15)" />
-              </button>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <button onClick={()=>setDarkMode(d=>!d)}
+                  style={{ background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.2)", borderRadius:50, width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:16 }}>
+                  {darkMode?"☀️":"🌙"}
+                </button>
+                <button onClick={()=>setShowProfile(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                  <Avatar name={user.displayName||user.email} photo={user.photoURL} size={38} color="#fff" bg="rgba(255,255,255,0.15)" />
+                </button>
+              </div>
             </div>
             <div style={{ display:"flex", gap:10, marginTop:22 }}>
               <button className="pill" style={{ background:"white", color:"#1a1a1a", fontSize:14, padding:"11px 20px" }} onClick={()=>setShowNewModal(true)}>+ Nuevo grupo</button>
@@ -545,21 +627,21 @@ export default function App() {
             {openGroups.length===0 ? (
               <div style={{ textAlign:"center", padding:"70px 0" }}>
                 <div style={{ fontSize:44, marginBottom:14 }}>🧾</div>
-                <div style={{ fontSize:16, color:"#999", fontWeight:600 }}>No tenés grupos activos</div>
-                <div style={{ fontSize:13, color:"#bbb", marginTop:6 }}>Creá uno o unite con un código</div>
+                <div style={{ fontSize:16, color:T.textSub, fontWeight:600 }}>No tenés grupos activos</div>
+                <div style={{ fontSize:13, color:T.textMuted, marginTop:6 }}>Creá uno o unite con un código</div>
               </div>
             ) : (
               <>
-                <div style={{ fontSize:12, fontWeight:700, color:"#bbb", letterSpacing:0.8, textTransform:"uppercase", marginBottom:14 }}>Activos</div>
+                <div style={{ fontSize:12, fontWeight:700, color:T.textMuted, letterSpacing:0.8, textTransform:"uppercase", marginBottom:14 }}>Activos</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   {openGroups.map(g => {
                     const sym=getCurSymbol(g.currency||"UYU");
                     return (
-                      <div key={g.id} className="card press" onClick={()=>openGroup(g.id)} style={{ padding:"18px 20px" }}>
+                      <motion.div key={g.id} whileTap={{scale:0.97}} onClick={()=>openGroup(g.id)} style={{ padding:"18px 20px", background:T.surface, borderRadius:20, border:`1.5px solid ${T.border}`, cursor:"pointer" }}>
                         <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
                           <div>
-                            <div style={{ fontWeight:700, fontSize:16 }}>{g.title}</div>
-                            <div style={{ fontSize:12, color:"#bbb", marginTop:2 }}>{g.createdAt} · {(g.expenses||[]).length} gastos · {g.currency||"UYU"}</div>
+                            <div style={{ fontWeight:700, fontSize:16, color:T.text }}>{g.title}</div>
+                            <div style={{ fontSize:12, color:T.textMuted, marginTop:2 }}>{g.createdAt} · {(g.expenses||[]).length} gastos · {g.currency||"UYU"}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
                             <div style={{ fontWeight:800, fontSize:20 }}>{sym}{totalGastos(g).toFixed(2)}</div>
@@ -578,13 +660,13 @@ export default function App() {
               </>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* ══ GROUP VIEW ════════════════════════════════════════════════════════ */}
       {screen==="group"&&active&&(
-        <div className="su" style={{ paddingBottom:80 }}>
-          <div style={{ background:"white", borderBottom:"1px solid #f0f0ed" }}>
+        <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-12}} transition={{duration:0.22,ease:[0.4,0,0.2,1]}} style={{ paddingBottom:80 }}>
+          <div style={{ background:T.surface, borderBottom:`1px solid ${T.border}` }}>
             <div style={{ padding:"52px 24px 0" }}>
               <div className="row" style={{ justifyContent:"space-between", marginBottom:6 }}>
                 <button onClick={()=>setScreen("home")} style={{ background:"none",border:"none",fontSize:22,cursor:"pointer",padding:"0 10px 0 0" }}>←</button>
@@ -605,7 +687,7 @@ export default function App() {
                   onKeyDown={e=>{ if(e.key==="Enter"){updateActive(g=>({...g,title:sanitize(titleInput,60)||g.title}));setEditTitle(false);}}}
                   autoFocus maxLength={60} style={{ fontSize:22,fontWeight:800,background:"transparent",border:"none",borderBottom:"2px solid #1a1a1a",borderRadius:0,padding:"4px 0",marginBottom:4 }}/>
               ):(
-                <div onClick={()=>{setTitleInput(active.title);setEditTitle(true);}} style={{ fontSize:22,fontWeight:800,letterSpacing:"-0.5px",marginBottom:2,cursor:"text" }}>
+                <div onClick={()=>{setTitleInput(active.title);setEditTitle(true);}} style={{ fontSize:22,fontWeight:800,letterSpacing:"-0.5px",marginBottom:2,cursor:"text",color:T.text }}>
                   {active.title}
                 </div>
               )}
@@ -616,7 +698,7 @@ export default function App() {
                   {copiedCode?"✓ copiado":"copiar"}
                 </button>
               </div>
-              <div style={{ fontSize:13,color:"#bbb",marginBottom:16 }}>
+              <div style={{ fontSize:13,color:T.textMuted,marginBottom:16 }}>
                 {(active.people||[]).length} personas · {curSymbol}{totalGastos(active).toFixed(2)} · {active.currency||"UYU"}
                 {ratesLoading&&<span style={{ marginLeft:6,fontSize:11 }}>↻ cargando cambio...</span>}
               </div>
@@ -624,7 +706,7 @@ export default function App() {
 
             <div className="tab-bar" style={{ padding:"0 24px" }}>
               {["gastos","personas","cuentas","gráfica"].map(t=>(
-                <button key={t} onClick={()=>setTab(t)} style={{ flex:1,padding:"12px 0",background:"none",border:"none",fontSize:13,fontWeight:600,cursor:"pointer",color:tab===t?"#1a1a1a":"#bbb",borderBottom:tab===t?"2.5px solid #1a1a1a":"2.5px solid transparent",transition:"all 0.15s" }}>
+                <button key={t} onClick={()=>setTab(t)} style={{ flex:1,padding:"12px 0",background:"none",border:"none",fontSize:13,fontWeight:600,cursor:"pointer",color:tab===t?T.text:T.textMuted,borderBottom:tab===t?`2.5px solid ${T.text}`:`2.5px solid transparent`,transition:"all 0.15s" }}>
                   {t.charAt(0).toUpperCase()+t.slice(1)}
                 </button>
               ))}
@@ -637,7 +719,7 @@ export default function App() {
             {tab==="gastos"&&(
               <div className="fi">
                 <div className="card" style={{ padding:20,marginBottom:20 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Nuevo gasto</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Nuevo gasto</div>
                   <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                     <input placeholder="Descripción (pizza, taxi...)" value={newExp.desc} onChange={e=>setNewExp(x=>({...x,desc:e.target.value}))} maxLength={100}/>
                     <div style={{ display:"flex",gap:10 }}>
@@ -672,26 +754,30 @@ export default function App() {
 
                 <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                   {(active.expenses||[]).length===0?(
-                    <div style={{ textAlign:"center",padding:"40px 0",color:"#bbb",fontSize:14 }}>Sin gastos todavía</div>
+                    <div style={{ textAlign:"center",padding:"40px 0",color:T.textMuted,fontSize:14 }}>Sin gastos todavía</div>
                   ):[...(active.expenses||[])].reverse().map(exp=>{
                     const payer=getPerson(active,exp.paidBy);
                     const share=(exp.amount/exp.splitWith.length).toFixed(2);
                     return (
-                      <div key={exp.id} className="card si" style={{ padding:"16px 18px" }}>
+                      <motion.div key={exp.id} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-40}} transition={{duration:0.2}}>
+                      <SwipeToDelete T={T} onDelete={()=>{ haptic(); removeExpense(exp.id); }}>
+                      <div style={{ padding:"16px 18px", background:T.surface, borderRadius:20, border:`1.5px solid ${T.border}` }}>
                         <div className="row" style={{ justifyContent:"space-between" }}>
                           <div style={{ flex:1 }}>
-                            <div style={{ fontWeight:700,fontSize:15,marginBottom:4 }}>{exp.desc}</div>
+                            <div style={{ fontWeight:700,fontSize:15,marginBottom:4,color:T.text }}>{exp.desc}</div>
                             <div className="row" style={{ gap:8 }}>
                               {payer&&<Avatar name={payer.name} color={payer.color} bg={payer.bg} size={18}/>}
-                              <span style={{ fontSize:12,color:"#888" }}>pagó {payer?.name} · ÷{exp.splitWith.length} = {curSymbol}{share} c/u</span>
+                              <span style={{ fontSize:12,color:T.textSub }}>pagó {payer?.name} · ÷{exp.splitWith.length} = {curSymbol}{share} c/u</span>
                             </div>
                           </div>
                           <div className="row" style={{ gap:10 }}>
-                            <span style={{ fontWeight:800,fontSize:18 }}>{curSymbol}{exp.amount.toFixed(2)}</span>
+                            <span style={{ fontWeight:800,fontSize:18,color:T.text }}>{curSymbol}{exp.amount.toFixed(2)}</span>
                             <button onClick={()=>removeExpense(exp.id)} style={{ background:"none",border:"none",fontSize:16,color:"#ddd",cursor:"pointer" }}>✕</button>
                           </div>
                         </div>
                       </div>
+                      </SwipeToDelete>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -702,7 +788,7 @@ export default function App() {
             {tab==="personas"&&(
               <div className="fi">
                 <div className="card" style={{ padding:20,marginBottom:20 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Agregar persona</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Agregar persona</div>
                   <div style={{ display:"flex",gap:10 }}>
                     <input placeholder="Nombre" value={newPerson} onChange={e=>setNewPerson(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPerson()} style={{ flex:1 }} maxLength={40}/>
                     <button className="btn" onClick={addPerson} style={{ width:"auto",padding:"12px 20px" }}>+</button>
@@ -714,13 +800,13 @@ export default function App() {
                   ):(active.people||[]).map(p=>{
                     const bal=balances[p.id]||0;
                     return (
-                      <div key={p.id} className="card si" style={{ padding:"16px 18px" }}>
+                      <motion.div key={p.id} initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{duration:0.18}} className="card" style={{ padding:"16px 18px", background:T.surface, border:`1.5px solid ${T.border}` }}>
                         <div className="row" style={{ justifyContent:"space-between" }}>
                           <div className="row" style={{ gap:12 }}>
                             <Avatar name={p.name} color={p.color} bg={p.bg} size={40}/>
                             <div>
-                              <div style={{ fontWeight:700,fontSize:15 }}>{p.name}</div>
-                              <div style={{ fontSize:12,color:"#bbb" }}>{(active.expenses||[]).filter(e=>e.splitWith.includes(p.id)).length} gastos</div>
+                              <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{p.name}</div>
+                              <div style={{ fontSize:12,color:T.textMuted }}>{(active.expenses||[]).filter(e=>e.splitWith.includes(p.id)).length} gastos</div>
                             </div>
                           </div>
                           <div className="row" style={{ gap:10 }}>
@@ -741,13 +827,13 @@ export default function App() {
             {tab==="cuentas"&&(
               <div className="fi">
                 <div className="card" style={{ padding:20,marginBottom:16 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Balances</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Balances</div>
                   {(active.people||[]).length===0?(
                     <div style={{ fontSize:14,color:"#bbb",textAlign:"center",padding:"16px 0" }}>Agregá personas primero</div>
                   ):(active.people||[]).map(p=>{
                     const bal=balances[p.id]||0;
                     return (
-                      <div key={p.id} className="row" style={{ justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #f7f7f5" }}>
+                      <div key={p.id} className="row" style={{ justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${T.border}` }}>
                         <div className="row" style={{ gap:10 }}>
                           <Avatar name={p.name} color={p.color} bg={p.bg} size={30}/>
                           <span style={{ fontWeight:600,fontSize:14 }}>{p.name}</span>
@@ -788,7 +874,7 @@ export default function App() {
                           </div>
                           <div className="row" style={{ gap:10 }}>
                             <span style={{ fontWeight:800,fontSize:17,color:paid?"#aaa":"#1a1a1a",textDecoration:paid?"line-through":"none" }}>{curSymbol}{s.amount.toFixed(2)}</span>
-                            <button onClick={()=>toggleSettlement(key)}
+                            <button onClick={()=>{ haptic(); toggleSettlement(key); }}
                               style={{ width:28,height:28,borderRadius:"50%",border:`2px solid ${paid?"#4CAF82":"#ddd"}`,background:paid?"#4CAF82":"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s" }}>
                               {paid&&<span style={{ color:"white",fontSize:14,fontWeight:700 }}>✓</span>}
                             </button>
@@ -815,11 +901,11 @@ export default function App() {
                 {/* Conversión de moneda */}
                 {Object.keys(rates).length>0&&(active.expenses||[]).length>0&&(
                   <div className="card" style={{ padding:20 }}>
-                    <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Equivalencias actuales</div>
+                    <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Equivalencias actuales</div>
                     {CURRENCIES.filter(c=>c.code!==(active.currency||"UYU")).map(c=>{
                       const converted=convertAmount(totalGastos(active),active.currency||"UYU",c.code);
                       return (
-                        <div key={c.code} className="row" style={{ justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f7f7f5" }}>
+                        <div key={c.code} className="row" style={{ justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${T.border}` }}>
                           <span style={{ fontSize:14,color:"#555" }}>{c.name}</span>
                           <span style={{ fontWeight:700,fontSize:14 }}>{c.symbol}{converted.toFixed(2)}</span>
                         </div>
@@ -866,7 +952,7 @@ export default function App() {
                     </div>
 
                     <div className="card" style={{ padding:20 }}>
-                      <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Resumen</div>
+                      <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Resumen</div>
                       <div className="row" style={{ justifyContent:"space-between",marginBottom:8 }}>
                         <span style={{ fontSize:14,color:"#555" }}>Total gastado</span>
                         <span style={{ fontWeight:800,fontSize:16 }}>{curSymbol}{totalGastos(active).toFixed(2)}</span>
@@ -885,14 +971,16 @@ export default function App() {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
+
+      </AnimatePresence>
 
       {/* MODAL: Nuevo grupo */}
       {showNewModal&&(
         <div className="modal-bg fi" onClick={e=>{if(e.target===e.currentTarget)setShowNewModal(false)}}>
-          <div className="modal">
-            <div style={{ fontWeight:800,fontSize:20,marginBottom:6 }}>Nuevo grupo</div>
+          <div className="modal" style={{ background:T.surface }}>
+            <div style={{ fontWeight:800,fontSize:20,marginBottom:6,color:T.text }}>Nuevo grupo</div>
             <div style={{ fontSize:13,color:"#bbb",marginBottom:20 }}>Dale un nombre y elegí la moneda</div>
             <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
               <input placeholder='Ej: "Asado", "Viaje a Colonia"...' value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createGroup()} autoFocus maxLength={60}/>
@@ -909,8 +997,8 @@ export default function App() {
       {/* MODAL: Unirse */}
       {showJoinModal&&(
         <div className="modal-bg fi" onClick={e=>{if(e.target===e.currentTarget){setShowJoinModal(false);setJoinError("");}}}>
-          <div className="modal">
-            <div style={{ fontWeight:800,fontSize:20,marginBottom:6 }}>Unirse a un grupo</div>
+          <div className="modal" style={{ background:T.surface }}>
+            <div style={{ fontWeight:800,fontSize:20,marginBottom:6,color:T.text }}>Unirse a un grupo</div>
             <div style={{ fontSize:13,color:"#bbb",marginBottom:20 }}>Pedile el código a quien creó el grupo</div>
             <input placeholder="Código del grupo" value={joinCode} onChange={e=>{setJoinCode(e.target.value);setJoinError("");}} onKeyDown={e=>e.key==="Enter"&&joinGroup()} autoFocus style={{ marginBottom:joinError?8:14,fontFamily:"monospace",letterSpacing:1 }}/>
             {joinError&&<div style={{ fontSize:13,color:"#E8734A",marginBottom:14 }}>{joinError}</div>}
@@ -923,7 +1011,7 @@ export default function App() {
       {/* MODAL: Perfil */}
       {showProfile&&(
         <div className="modal-bg fi" onClick={e=>{if(e.target===e.currentTarget)setShowProfile(false)}}>
-          <div className="modal">
+          <div className="modal" style={{ background:T.surface }}>
             <div style={{ display:"flex",alignItems:"center",gap:16,marginBottom:24 }}>
               <Avatar name={user.displayName||user.email} photo={user.photoURL} size={56}/>
               <div>
@@ -931,7 +1019,7 @@ export default function App() {
                 <div style={{ fontSize:13,color:"#bbb",marginTop:2 }}>{user.email}</div>
               </div>
             </div>
-            <div style={{ background:"#f7f7f5",borderRadius:14,padding:"14px 16px",marginBottom:20 }}>
+            <div style={{ background:T.rowBg,borderRadius:14,padding:"14px 16px",marginBottom:20 }}>
               <div style={{ fontSize:12,color:"#bbb",marginBottom:4 }}>Grupos activos</div>
               <div style={{ fontWeight:800,fontSize:22 }}>{openGroups.length}</div>
             </div>
