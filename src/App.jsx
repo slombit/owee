@@ -184,20 +184,38 @@ export default function App() {
   }, [user]);
 
   // ── Tipo de cambio ──────────────────────────────────────────────────────────
+  const FALLBACK_RATES = {
+    UYU: { USD:0.026, ARS:970, BRL:0.135, EUR:0.024, UYU:1 },
+    USD: { UYU:38.5,  ARS:975, BRL:5.15,  EUR:0.92,  USD:1 },
+    ARS: { UYU:0.04,  USD:0.001, BRL:0.005, EUR:0.001, ARS:1 },
+    BRL: { UYU:7.5,   USD:0.19,  ARS:189,   EUR:0.18,  BRL:1 },
+    EUR: { UYU:41.5,  USD:1.08,  ARS:1055,  BRL:5.6,   EUR:1 },
+  };
+
   const fetchRates = useCallback(async (baseCurrency="UYU") => {
     if (rates[baseCurrency]) return;
     setRatesLoading(true);
+    let loaded = false;
     try {
-      const res  = await fetch(`https://api.exchangerate-api.com/v4/latest/${baseCurrency}`);
-      const data = await res.json();
-      setRates(prev => ({ ...prev, [baseCurrency]: data.rates }));
-    } catch {
-      // fallback: tasas aproximadas fijas si falla la API
-      const fallback = { UYU:{ USD:0.026, ARS:24.5, BRL:0.14, EUR:0.024, UYU:1 }, USD:{ UYU:38.5, ARS:950, BRL:5.2, EUR:0.92, USD:1 } };
-      if (fallback[baseCurrency]) setRates(prev => ({ ...prev, [baseCurrency]: fallback[baseCurrency] }));
-    } finally {
-      setRatesLoading(false);
+      const res = await fetch(`https://open.er-api.com/v6/latest/${baseCurrency}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.rates) { setRates(prev => ({ ...prev, [baseCurrency]: data.rates })); loaded = true; }
+      }
+    } catch {}
+    if (!loaded) {
+      try {
+        const res2 = await fetch(`https://api.exchangerate-api.com/v4/latest/${baseCurrency}`);
+        if (res2.ok) {
+          const data2 = await res2.json();
+          if (data2.rates) { setRates(prev => ({ ...prev, [baseCurrency]: data2.rates })); loaded = true; }
+        }
+      } catch {}
     }
+    if (!loaded && FALLBACK_RATES[baseCurrency]) {
+      setRates(prev => ({ ...prev, [baseCurrency]: FALLBACK_RATES[baseCurrency] }));
+    }
+    setRatesLoading(false);
   }, [rates]);
 
   const convertAmount = (amount, fromCurrency, toCurrency) => {
@@ -645,13 +663,13 @@ export default function App() {
                           </div>
                           <div style={{ textAlign:"right" }}>
                             <div style={{ fontWeight:800, fontSize:20 }}>{sym}{totalGastos(g).toFixed(2)}</div>
-                            <div style={{ fontSize:11, color:"#bbb" }}>total</div>
+                            <div style={{ fontSize:11, color:T.textMuted }}>total</div>
                           </div>
                         </div>
                         <div className="row" style={{ gap:6 }}>
                           {(g.people||[]).slice(0,6).map(p=><Avatar key={p.id} name={p.name} color={p.color} bg={p.bg} size={28}/>)}
                           {(g.people||[]).length>6&&<div style={{ width:28,height:28,borderRadius:"50%",background:"#f0f0ed",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#999",fontWeight:700 }}>+{g.people.length-6}</div>}
-                          {(g.people||[]).length===0&&<div style={{ fontSize:12,color:"#bbb" }}>Sin personas</div>}
+                          {(g.people||[]).length===0&&<div style={{ fontSize:12,color:T.textMuted }}>Sin personas</div>}
                         </div>
                       </motion.div>
                     );
@@ -810,7 +828,7 @@ export default function App() {
                             </div>
                           </div>
                           <div className="row" style={{ gap:10 }}>
-                            <div style={{ fontWeight:800,fontSize:15,color:bal>0.01?"#4CAF82":bal<-0.01?"#E8734A":"#bbb" }}>
+                            <div style={{ fontWeight:800,fontSize:15,color:bal>0.01?T.green:bal<-0.01?T.orange:T.textMuted }}>
                               {bal>0.01?`+${curSymbol}${bal.toFixed(2)}`:bal<-0.01?`-${curSymbol}${Math.abs(bal).toFixed(2)}`:"✓"}
                             </div>
                             <button onClick={()=>removePerson(p.id)} style={{ background:"none",border:"none",fontSize:16,color:"#ddd",cursor:"pointer" }}>✕</button>
@@ -829,16 +847,16 @@ export default function App() {
                 <div className="card" style={{ padding:20,marginBottom:16 }}>
                   <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Balances</div>
                   {(active.people||[]).length===0?(
-                    <div style={{ fontSize:14,color:"#bbb",textAlign:"center",padding:"16px 0" }}>Agregá personas primero</div>
+                    <div style={{ fontSize:14,color:T.textMuted,textAlign:"center",padding:"16px 0" }}>Agregá personas primero</div>
                   ):(active.people||[]).map(p=>{
                     const bal=balances[p.id]||0;
                     return (
                       <div key={p.id} className="row" style={{ justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${T.border}` }}>
                         <div className="row" style={{ gap:10 }}>
                           <Avatar name={p.name} color={p.color} bg={p.bg} size={30}/>
-                          <span style={{ fontWeight:600,fontSize:14 }}>{p.name}</span>
+                          <span style={{ fontWeight:600,fontSize:14,color:T.text }}>{p.name}</span>
                         </div>
-                        <div style={{ fontWeight:700,fontSize:14,color:bal>0.01?"#4CAF82":bal<-0.01?"#E8734A":"#bbb" }}>
+                        <div style={{ fontWeight:700,fontSize:14,color:bal>0.01?T.green:bal<-0.01?T.orange:T.textMuted }}>
                           {bal>0.01?`le deben ${curSymbol}${bal.toFixed(2)}`:bal<-0.01?`debe ${curSymbol}${Math.abs(bal).toFixed(2)}`:"al día ✓"}
                         </div>
                       </div>
@@ -870,7 +888,7 @@ export default function App() {
                         <div className="row" style={{ justifyContent:"space-between",marginBottom:6 }}>
                           <div className="row" style={{ gap:8 }}>
                             <Avatar name={from.name} color={from.color} bg={from.bg} size={26}/>
-                            <span style={{ fontSize:14,fontWeight:600,textDecoration:paid?"line-through":"none",color:paid?"#aaa":"#1a1a1a" }}>{from.name}</span>
+                            <span style={{ fontSize:14,fontWeight:600,textDecoration:paid?"line-through":"none",color:paid?T.textMuted:T.text }}>{from.name}</span>
                           </div>
                           <div className="row" style={{ gap:10 }}>
                             <span style={{ fontWeight:800,fontSize:17,color:paid?"#aaa":"#1a1a1a",textDecoration:paid?"line-through":"none" }}>{curSymbol}{s.amount.toFixed(2)}</span>
@@ -883,35 +901,55 @@ export default function App() {
                         <div className="row" style={{ gap:6,paddingLeft:4 }}>
                           <span style={{ fontSize:12,color:"#bbb" }}>→ para</span>
                           <Avatar name={to.name} color={to.color} bg={to.bg} size={20}/>
-                          <span style={{ fontSize:13,fontWeight:600,color:paid?"#aaa":"#555" }}>{to.name}</span>
+                          <span style={{ fontSize:13,fontWeight:600,color:paid?T.textMuted:T.textSub }}>{to.name}</span>
                         </div>
                         {paid&&(
-                          <div style={{ fontSize:11,color:"#4CAF82",fontWeight:600,marginTop:6,paddingLeft:4 }}>✓ Pagado</div>
+                          <div style={{ fontSize:11,color:T.green,fontWeight:600,marginTop:6,paddingLeft:4 }}>✓ Pagado</div>
                         )}
                       </div>
                     );
                   })}
                   {settlements.length>0&&settlements.every((_,i)=>(active.paidSettlements||{})[`${i}`])&&(
-                    <div style={{ textAlign:"center",padding:"12px 0 4px",fontSize:14,fontWeight:700,color:"#4CAF82" }}>
+                    <div style={{ textAlign:"center",padding:"12px 0 4px",fontSize:14,fontWeight:700,color:T.green }}>
                       🎉 ¡Todos los pagos completados!
                     </div>
                   )}
                 </div>
 
                 {/* Conversión de moneda */}
-                {Object.keys(rates).length>0&&(active.expenses||[]).length>0&&(
-                  <div className="card" style={{ padding:20 }}>
-                    <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Equivalencias actuales</div>
-                    {CURRENCIES.filter(c=>c.code!==(active.currency||"UYU")).map(c=>{
+                {(active.expenses||[]).length>0&&(
+                  <div className="card" style={{ padding:20, background:T.surface, border:`1.5px solid ${T.border}` }}>
+                    <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
+                      <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase" }}>Equivalencias</div>
+                      {ratesLoading
+                        ? <span style={{ fontSize:11,color:T.textMuted }}>↻ cargando...</span>
+                        : <button onClick={()=>{ setRates({}); fetchRates(active.currency||"UYU"); }}
+                            style={{ background:"none",border:"none",fontSize:11,color:T.textMuted,cursor:"pointer",textDecoration:"underline" }}>
+                            actualizar
+                          </button>
+                      }
+                    </div>
+                    {ratesLoading?(
+                      <div style={{ padding:"16px 0",textAlign:"center",color:T.textMuted,fontSize:13 }}>Cargando tasas...</div>
+                    ):CURRENCIES.filter(c=>c.code!==(active.currency||"UYU")).map(c=>{
                       const converted=convertAmount(totalGastos(active),active.currency||"UYU",c.code);
+                      const hasRate=rates[active.currency||"UYU"]?.[c.code];
                       return (
-                        <div key={c.code} className="row" style={{ justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${T.border}` }}>
-                          <span style={{ fontSize:14,color:"#555" }}>{c.name}</span>
-                          <span style={{ fontWeight:700,fontSize:14 }}>{c.symbol}{converted.toFixed(2)}</span>
+                        <div key={c.code} className="row" style={{ justifyContent:"space-between",padding:"10px 0",borderBottom:`1px solid ${T.border}` }}>
+                          <div>
+                            <div style={{ fontSize:14,color:T.text,fontWeight:500 }}>{c.name}</div>
+                            <div style={{ fontSize:11,color:T.textMuted }}>{c.code}</div>
+                          </div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{c.symbol}{converted.toFixed(2)}</div>
+                            {!hasRate&&<div style={{ fontSize:10,color:T.textMuted }}>aprox.</div>}
+                          </div>
                         </div>
                       );
                     })}
-                    <div style={{ fontSize:11,color:"#bbb",marginTop:10 }}>Tasas actualizadas en tiempo real</div>
+                    <div style={{ fontSize:11,color:T.textMuted,marginTop:10 }}>
+                      {Object.keys(rates).length>0?"Tasas en tiempo real":"Tasas aproximadas"}
+                    </div>
                   </div>
                 )}
               </div>
@@ -921,7 +959,7 @@ export default function App() {
             {tab==="gráfica"&&(
               <div className="fi">
                 {chartData.length===0||totalGastos(active)===0?(
-                  <div style={{ textAlign:"center",padding:"60px 0",color:"#bbb",fontSize:14 }}>
+                  <div style={{ textAlign:"center",padding:"60px 0",color:T.textMuted,fontSize:14 }}>
                     <div style={{ fontSize:36,marginBottom:12 }}>📊</div>
                     Agregá gastos para ver la gráfica
                   </div>
@@ -936,10 +974,10 @@ export default function App() {
                             <div className="row" style={{ justifyContent:"space-between",marginBottom:6 }}>
                               <div className="row" style={{ gap:8 }}>
                                 <div style={{ width:10,height:10,borderRadius:"50%",background:d.color,flexShrink:0 }}/>
-                                <span style={{ fontSize:14,fontWeight:600 }}>{d.name}</span>
+                                <span style={{ fontSize:14,fontWeight:600,color:T.text }}>{d.name}</span>
                               </div>
                               <div className="row" style={{ gap:8 }}>
-                                <span style={{ fontSize:13,color:"#888" }}>{curSymbol}{d.amount.toFixed(2)}</span>
+                                <span style={{ fontSize:13,color:T.textSub }}>{curSymbol}{d.amount.toFixed(2)}</span>
                                 <span style={{ fontSize:13,fontWeight:700,minWidth:36,textAlign:"right" }}>{d.pct}%</span>
                               </div>
                             </div>
@@ -954,16 +992,16 @@ export default function App() {
                     <div className="card" style={{ padding:20 }}>
                       <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Resumen</div>
                       <div className="row" style={{ justifyContent:"space-between",marginBottom:8 }}>
-                        <span style={{ fontSize:14,color:"#555" }}>Total gastado</span>
-                        <span style={{ fontWeight:800,fontSize:16 }}>{curSymbol}{totalGastos(active).toFixed(2)}</span>
+                        <span style={{ fontSize:14,color:T.textSub }}>Total gastado</span>
+                        <span style={{ fontWeight:800,fontSize:16,color:T.text }}>{curSymbol}{totalGastos(active).toFixed(2)}</span>
                       </div>
                       <div className="row" style={{ justifyContent:"space-between",marginBottom:8 }}>
-                        <span style={{ fontSize:14,color:"#555" }}>Promedio por persona</span>
+                        <span style={{ fontSize:14,color:T.textSub }}>Promedio por persona</span>
                         <span style={{ fontWeight:700,fontSize:14 }}>{curSymbol}{((active.people||[]).length>0?totalGastos(active)/(active.people||[]).length:0).toFixed(2)}</span>
                       </div>
                       <div className="row" style={{ justifyContent:"space-between" }}>
-                        <span style={{ fontSize:14,color:"#555" }}>Cantidad de gastos</span>
-                        <span style={{ fontWeight:700,fontSize:14 }}>{(active.expenses||[]).length}</span>
+                        <span style={{ fontSize:14,color:T.textSub }}>Cantidad de gastos</span>
+                        <span style={{ fontWeight:700,fontSize:14,color:T.text }}>{(active.expenses||[]).length}</span>
                       </div>
                     </div>
                   </>
