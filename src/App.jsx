@@ -171,7 +171,18 @@ const genGroupCode = () => {
 };
 const today     = () => new Date().toLocaleDateString("es-UY");
 const sanitize  = (str, max=80) => String(str||"").trim().slice(0,max);
-const safeAmt   = (val) => { const n=parseFloat(val); return (!isNaN(n)&&n>0&&n<1000000)?n:null; };
+const safeAmt   = (val) => { const n=parseFloat(val); return (!isNaN(n)&&n>0&&n<1000000000000000)?n:null; }; // hasta 15 dígitos
+
+// Formato de dinero estilo rioplatense: punto para miles, coma para decimales (ej: 1.234,50)
+const fmt = (n) => {
+  if (n===null || n===undefined || isNaN(n)) return "0,00";
+  const num = Number(n);
+  const parts = num.toFixed(2).split(".");
+  const intPart = parts[0].replace("-", "");
+  const sign = num < 0 ? "-" : "";
+  const withDots = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${sign}${withDots},${parts[1]}`;
+};
 const makeGroup = (title="Nuevo grupo", currency="UYU", createdBy=null) => ({
   id: genGroupCode(), title, people:[], expenses:[], createdAt:today(), closed:false, currency, createdBy
 });
@@ -615,12 +626,12 @@ export default function App() {
     const settles  = getSettlements(active);
     const people   = active.people  ||[];
     const expenses = active.expenses||[];
-    let msg=`🧾 *${active.title}*\n📅 ${active.createdAt}\n👥 ${people.map(p=>p.name).join(", ")}\n💰 Total: *${sym}${total.toFixed(2)}*\n🔑 Código: \`${active.id}\`\n\n`;
+    let msg=`🧾 *${active.title}*\n📅 ${active.createdAt}\n👥 ${people.map(p=>p.name).join(", ")}\n💰 Total: *${sym}${fmt(total)}*\n🔑 Código: \`${active.id}\`\n\n`;
     if (expenses.length>0) {
       msg+=`📋 *Gastos:*\n`;
       expenses.forEach(exp => {
         const payer=people.find(p=>p.id===exp.paidBy);
-        msg+=`• ${exp.desc}: ${sym}${exp.amount.toFixed(2)} (pagó ${payer?.name||"?"})\n`;
+        msg+=`• ${exp.desc}: ${sym}${fmt(exp.amount)} (pagó ${payer?.name||"?"})\n`;
       });
       msg+=`\n`;
     }
@@ -630,7 +641,7 @@ export default function App() {
       settles.forEach(s => {
         const from=people.find(p=>p.id===s.from);
         const to  =people.find(p=>p.id===s.to);
-        msg+=`• ${from?.name} le paga *${sym}${s.amount.toFixed(2)}* a ${to?.name}\n`;
+        msg+=`• ${from?.name} le paga *${sym}${fmt(s.amount)}* a ${to?.name}\n`;
       });
     }
     msg+=`\n_Hecho con Owee_ 🤙`;
@@ -918,7 +929,7 @@ export default function App() {
                             <div style={{ fontSize:12, color:T.textMuted, marginTop:2 }}>{g.createdAt} · {(g.expenses||[]).length} {t("expenses")} · {g.currency||"UYU"}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
-                            <div style={{ fontWeight:800, fontSize:20, color:T.text }}>{sym}{totalGastos(g).toFixed(2)}</div>
+                            <div style={{ fontWeight:800, fontSize:20, color:T.text }}>{sym}{fmt(totalGastos(g))}</div>
                             <div style={{ fontSize:11, color:T.textMuted }}>{t("total")}</div>
                           </div>
                         </div>
@@ -973,7 +984,7 @@ export default function App() {
                 </button>
               </div>
               <div style={{ fontSize:13,color:T.textMuted,marginBottom:16 }}>
-                {(active.people||[]).length} {t("people")} · {curSymbol}{totalGastos(active).toFixed(2)} · {active.currency||"UYU"}
+                {(active.people||[]).length} {t("people")} · {curSymbol}{fmt(totalGastos(active))} · {active.currency||"UYU"}
                 {ratesLoading&&<span style={{ marginLeft:6,fontSize:11 }}>↻ ...</span>}
               </div>
             </div>
@@ -1011,7 +1022,7 @@ export default function App() {
                     <div style={{ display:"flex",gap:10 }}>
                       <div style={{ flex:1,position:"relative" }}>
                         <span style={{ position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:14,color:T.textMuted,pointerEvents:"none" }}>{curSymbol}</span>
-                        <input type="number" placeholder="0.00" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:e.target.value}))} style={{ paddingLeft:30 }} min="0" max="999999"/>
+                        <input type="number" placeholder="0.00" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:e.target.value}))} style={{ paddingLeft:30 }} min="0" max="999999999999999"/>
                       </div>
                       <select value={newExp.paidBy} onChange={e=>setNewExp(x=>({...x,paidBy:e.target.value}))} style={{ flex:1 }}>
                         <option value="">{t("whoPaid")}</option>
@@ -1075,7 +1086,7 @@ export default function App() {
                     <div style={{ textAlign:"center",padding:"40px 0",color:T.textMuted,fontSize:14 }}>{t("noExpensesYet")}</div>
                   ):[...(active.expenses||[])].reverse().map(exp=>{
                     const payer=getPerson(active,exp.paidBy);
-                    const share=(exp.amount/exp.splitWith.length).toFixed(2);
+                    const share=fmt(exp.amount/exp.splitWith.length);
                     const cat=getCategory(exp.category);
                     return (
                       <motion.div key={exp.id} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,x:-40}} transition={{duration:0.2}}>
@@ -1099,7 +1110,7 @@ export default function App() {
                             </div>
                           </div>
                           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
-                            <span style={{ fontWeight:800,fontSize:18,color:T.text }}>{curSymbol}{exp.amount.toFixed(2)}</span>
+                            <span style={{ fontWeight:800,fontSize:18,color:T.text }}>{curSymbol}{fmt(exp.amount)}</span>
                             <div className="row" style={{ gap:8 }}>
                               <button onClick={()=>startEditExpense(exp)} style={{ background:"none",border:"none",fontSize:13,color:T.textMuted,cursor:"pointer" }}>✎</button>
                               <button onClick={()=>removeExpense(exp.id)} style={{ background:"none",border:"none",fontSize:14,color:T.textMuted,cursor:"pointer" }}>✕</button>
@@ -1142,7 +1153,7 @@ export default function App() {
                           </div>
                           <div className="row" style={{ gap:10 }}>
                             <div style={{ fontWeight:800,fontSize:15,color:bal>0.01?T.green:bal<-0.01?T.orange:T.textMuted }}>
-                              {bal>0.01?`+${curSymbol}${bal.toFixed(2)}`:bal<-0.01?`-${curSymbol}${Math.abs(bal).toFixed(2)}`:"✓"}
+                              {bal>0.01?`+${curSymbol}${fmt(bal)}`:bal<-0.01?`-${curSymbol}${fmt(Math.abs(bal))}`:"✓"}
                             </div>
                             <button onClick={()=>removePerson(p.id)} style={{ background:"none",border:"none",fontSize:16,color:"#ddd",cursor:"pointer" }}>✕</button>
                           </div>
@@ -1170,7 +1181,7 @@ export default function App() {
                           <span style={{ fontWeight:600,fontSize:14,color:T.text }}>{p.name}</span>
                         </div>
                         <div style={{ fontWeight:700,fontSize:14,color:bal>0.01?T.green:bal<-0.01?T.orange:T.textMuted }}>
-                          {bal>0.01?`${t("owed")} ${curSymbol}${bal.toFixed(2)}`:bal<-0.01?`${t("owes")} ${curSymbol}${Math.abs(bal).toFixed(2)}`:t("upToDate")}
+                          {bal>0.01?`${t("owed")} ${curSymbol}${fmt(bal)}`:bal<-0.01?`${t("owes")} ${curSymbol}${fmt(Math.abs(bal))}`:t("upToDate")}
                         </div>
                       </div>
                     );
@@ -1204,7 +1215,7 @@ export default function App() {
                             <span style={{ fontSize:14,fontWeight:600,textDecoration:paid?"line-through":"none",color:paid?T.textMuted:T.text }}>{from.name}</span>
                           </div>
                           <div className="row" style={{ gap:10 }}>
-                            <span style={{ fontWeight:800,fontSize:17,color:paid?T.textMuted:T.text,textDecoration:paid?"line-through":"none" }}>{curSymbol}{s.amount.toFixed(2)}</span>
+                            <span style={{ fontWeight:800,fontSize:17,color:paid?T.textMuted:T.text,textDecoration:paid?"line-through":"none" }}>{curSymbol}{fmt(s.amount)}</span>
                             <button onClick={()=>{ haptic(); toggleSettlement(key); }}
                               style={{ width:28,height:28,borderRadius:"50%",border:`2px solid ${paid?T.green:T.border2}`,background:paid?T.green:T.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s" }}>
                               {paid&&<span style={{ color:"white",fontSize:14,fontWeight:700 }}>✓</span>}
@@ -1258,7 +1269,7 @@ export default function App() {
                               <div style={{ fontWeight:600,fontSize:13,color:T.textMuted }}>{t("notAvailable")}</div>
                             ):(
                               <>
-                                <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{c.symbol}{converted.toFixed(2)}</div>
+                                <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{c.symbol}{fmt(converted)}</div>
                                 {!isLive&&<div style={{ fontSize:10,color:T.textMuted }}>{t("reference")}</div>}
                               </>
                             )}
@@ -1296,7 +1307,7 @@ export default function App() {
                                 <span style={{ fontSize:14,fontWeight:600,color:T.text }}>{d.name}</span>
                               </div>
                               <div className="row" style={{ gap:8 }}>
-                                <span style={{ fontSize:13,color:T.textSub }}>{curSymbol}{d.amount.toFixed(2)}</span>
+                                <span style={{ fontSize:13,color:T.textSub }}>{curSymbol}{fmt(d.amount)}</span>
                                 <span style={{ fontSize:13,fontWeight:700,minWidth:36,textAlign:"right",color:T.text }}>{d.pct}%</span>
                               </div>
                             </div>
@@ -1321,7 +1332,7 @@ export default function App() {
                                   <span style={{ fontSize:14,fontWeight:600,color:T.text }}>{d.icon} {d.name}</span>
                                 </div>
                                 <div className="row" style={{ gap:8 }}>
-                                  <span style={{ fontSize:13,color:T.textSub }}>{curSymbol}{d.amount.toFixed(2)}</span>
+                                  <span style={{ fontSize:13,color:T.textSub }}>{curSymbol}{fmt(d.amount)}</span>
                                   <span style={{ fontSize:13,fontWeight:700,minWidth:36,textAlign:"right",color:T.text }}>{d.pct}%</span>
                                 </div>
                               </div>
@@ -1338,11 +1349,11 @@ export default function App() {
                       <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>{t("summary")}</div>
                       <div className="row" style={{ justifyContent:"space-between",marginBottom:8 }}>
                         <span style={{ fontSize:14,color:T.textSub }}>{t("totalSpent")}</span>
-                        <span style={{ fontWeight:800,fontSize:16,color:T.text }}>{curSymbol}{totalGastos(active).toFixed(2)}</span>
+                        <span style={{ fontWeight:800,fontSize:16,color:T.text }}>{curSymbol}{fmt(totalGastos(active))}</span>
                       </div>
                       <div className="row" style={{ justifyContent:"space-between",marginBottom:8 }}>
                         <span style={{ fontSize:14,color:T.textSub }}>{t("avgPerPerson")}</span>
-                        <span style={{ fontWeight:700,fontSize:14,color:T.text }}>{curSymbol}{((active.people||[]).length>0?totalGastos(active)/(active.people||[]).length:0).toFixed(2)}</span>
+                        <span style={{ fontWeight:700,fontSize:14,color:T.text }}>{curSymbol}{fmt((active.people||[]).length>0?totalGastos(active)/(active.people||[]).length:0)}</span>
                       </div>
                       <div className="row" style={{ justifyContent:"space-between" }}>
                         <span style={{ fontSize:14,color:T.textSub }}>{t("expenseCount")}</span>
