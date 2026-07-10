@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db } from "./firebase.js";
 import { ref, onValue, set, remove } from "firebase/database";
-import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, updatePassword } from "firebase/auth";
 
 // ── Theme tokens ──────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -61,6 +61,84 @@ const CATEGORIES = [
   { code:"otro",       label:"Otro",        icon:"📦" },
 ];
 const getCategory = (code) => CATEGORIES.find(c=>c.code===code) || CATEGORIES[CATEGORIES.length-1];
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+const TRANSLATIONS = {
+  es: {
+    tagline: "Dividí gastos sin drama",
+    newGroup: "Nuevo grupo", join: "Unirse", active: "Activos",
+    noActiveGroups: "No tenés grupos activos", createOrJoin: "Creá uno o unite con un código",
+    total: "total", people: "personas", expenses: "gastos", noPeople: "Sin personas",
+    tabExpenses: "Gastos", tabPeople: "Personas", tabAccounts: "Cuentas", tabChart: "Gráfica",
+    share: "Compartir", copied: "Copiado!", delete: "Eliminar", copy: "copiar",
+    newExpense: "Nuevo gasto", editingExpense: "Editando gasto", cancel: "Cancelar",
+    description: "Descripción (pizza, taxi...)", whoPaid: "¿Quién pagó?", category: "Categoría:",
+    splitBetween: "Dividir entre:", all: "Todos", receiptPhoto: "Foto del recibo (opcional):",
+    addPhoto: "📷 Agregar foto", uploading: "Subiendo...",
+    addFirst: "Primero agregá personas", addExpenseBtn: "Agregar gasto", saveChanges: "Guardar cambios",
+    noExpensesYet: "Sin gastos todavía", paid: "pagó",
+    addPerson: "Agregar persona", name: "Nombre", addPersonPrompt: "Agregá a las personas del grupo",
+    balances: "Balances", addPeopleFirst: "Agregá personas primero",
+    whoOwesWhom: "¿Quién paga a quién?", addPeopleAndExpenses: "Agregá personas y gastos", allSettled: "✓ Todos al día",
+    owes: "debe", owed: "le deben", upToDate: "al día ✓",
+    markedPaid: "pagados", allDone: "🎉 ¡Todos los pagos completados!", paidLabel: "✓ Pagado",
+    equivalences: "Equivalencias", update: "actualizar", loadingRates: "Cargando tasas...",
+    notAvailable: "no disponible", reference: "referencia", liveRates: "Tasas en tiempo real cuando están disponibles", refRates: "Tasas de referencia",
+    expenseByPerson: "Gasto por persona", expenseByCategory: "Gasto por categoría",
+    addExpensesForChart: "Agregá gastos para ver la gráfica", summary: "Resumen",
+    totalSpent: "Total gastado", avgPerPerson: "Promedio por persona", expenseCount: "Cantidad de gastos",
+    newGroupTitle: "Nuevo grupo", nameGroup: "Dale un nombre y elegí la moneda",
+    groupNamePlaceholder: 'Ej: "Asado", "Viaje a Colonia"...', createGroupBtn: "Crear grupo",
+    joinGroupTitle: "Unirse a un grupo", askCode: "Pedile el código a quien creó el grupo",
+    codeInvalid: "Código inválido.", notFound: "No encontré ese grupo. Revisá el código.", joinBtn: "Unirme",
+    profile: "Perfil", settings: "Configuración", logout: "Cerrar sesión",
+    login: "Iniciar sesión", createAccount: "Crear cuenta", username: "Nombre de usuario",
+    email: "Email", password: "Contraseña", enter: "Entrar", or: "o", continueGoogle: "Continuar con Google",
+    termsNotice: "Al registrarte aceptás los términos de uso de Owee",
+    settingsTitle: "Configuración", accountDetails: "Detalles de la cuenta",
+    profilePhoto: "Foto de perfil", changePhoto: "Cambiar foto", newPassword: "Nueva contraseña (opcional)",
+    save: "Guardar", saved: "Guardado ✓", appearance: "Apariencia", darkMode: "Modo oscuro", lightMode: "Modo claro",
+    language: "Idioma", spanish: "Español", english: "English",
+    activeGroups: "Grupos activos", back: "Volver",
+  },
+  en: {
+    tagline: "Split expenses, drama-free",
+    newGroup: "New group", join: "Join", active: "Active",
+    noActiveGroups: "You don't have active groups", createOrJoin: "Create one or join with a code",
+    total: "total", people: "people", expenses: "expenses", noPeople: "No people",
+    tabExpenses: "Expenses", tabPeople: "People", tabAccounts: "Balances", tabChart: "Chart",
+    share: "Share", copied: "Copied!", delete: "Delete", copy: "copy",
+    newExpense: "New expense", editingExpense: "Editing expense", cancel: "Cancel",
+    description: "Description (pizza, taxi...)", whoPaid: "Who paid?", category: "Category:",
+    splitBetween: "Split between:", all: "All", receiptPhoto: "Receipt photo (optional):",
+    addPhoto: "📷 Add photo", uploading: "Uploading...",
+    addFirst: "Add people first", addExpenseBtn: "Add expense", saveChanges: "Save changes",
+    noExpensesYet: "No expenses yet", paid: "paid",
+    addPerson: "Add person", name: "Name", addPersonPrompt: "Add people to the group",
+    balances: "Balances", addPeopleFirst: "Add people first",
+    whoOwesWhom: "Who pays whom?", addPeopleAndExpenses: "Add people and expenses", allSettled: "✓ Everyone is settled",
+    owes: "owes", owed: "is owed", upToDate: "settled ✓",
+    markedPaid: "paid", allDone: "🎉 All payments completed!", paidLabel: "✓ Paid",
+    equivalences: "Equivalences", update: "refresh", loadingRates: "Loading rates...",
+    notAvailable: "not available", reference: "reference", liveRates: "Live rates when available", refRates: "Reference rates",
+    expenseByPerson: "Expense by person", expenseByCategory: "Expense by category",
+    addExpensesForChart: "Add expenses to see the chart", summary: "Summary",
+    totalSpent: "Total spent", avgPerPerson: "Average per person", expenseCount: "Number of expenses",
+    newGroupTitle: "New group", nameGroup: "Give it a name and choose the currency",
+    groupNamePlaceholder: 'E.g: "Dinner", "Trip to Colonia"...', createGroupBtn: "Create group",
+    joinGroupTitle: "Join a group", askCode: "Ask whoever created the group for the code",
+    codeInvalid: "Invalid code.", notFound: "Couldn't find that group. Check the code.", joinBtn: "Join",
+    profile: "Profile", settings: "Settings", logout: "Log out",
+    login: "Log in", createAccount: "Create account", username: "Username",
+    email: "Email", password: "Password", enter: "Enter", or: "or", continueGoogle: "Continue with Google",
+    termsNotice: "By signing up you accept Owee's terms of use",
+    settingsTitle: "Settings", accountDetails: "Account details",
+    profilePhoto: "Profile photo", changePhoto: "Change photo", newPassword: "New password (optional)",
+    save: "Save", saved: "Saved ✓", appearance: "Appearance", darkMode: "Dark mode", lightMode: "Light mode",
+    language: "Language", spanish: "Español", english: "English",
+    activeGroups: "Active groups", back: "Back",
+  },
+};
 
 // ── Cloudinary (para fotos de recibo) ─────────────────────────────────────────
 // Completá con tus datos de Cloudinary (ver guía)
@@ -177,13 +255,37 @@ export default function App() {
   const [darkMode,      setDarkMode]      = useState(() => {
     try { return localStorage.getItem("owee-dark")==="1"; } catch { return false; }
   });
+  const [lang,          setLang]          = useState(() => {
+    try { return localStorage.getItem("owee-lang") || "es"; } catch { return "es"; }
+  });
+  const [showSettings,  setShowSettings]  = useState(false);
+  const [profileUsername, setProfileUsername] = useState("");
+  const [profileEmail,    setProfileEmail]    = useState("");
+  const [profilePass,     setProfilePass]     = useState("");
+  const [profilePhotoFile,setProfilePhotoFile]= useState(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
+  const [profileSaving,   setProfileSaving]   = useState(false);
+  const [profileSaved,    setProfileSaved]    = useState(false);
+  const [profileError,    setProfileError]    = useState("");
 
   const T = darkMode ? DARK : LIGHT;
+  const t = (key) => TRANSLATIONS[lang]?.[key] || TRANSLATIONS.es[key] || key;
 
   useEffect(() => {
     try { localStorage.setItem("owee-dark", darkMode?"1":"0"); } catch {}
     document.body.style.background = darkMode ? DARK.bg : LIGHT.bg;
   }, [darkMode]);
+
+  useEffect(() => {
+    try { localStorage.setItem("owee-lang", lang); } catch {}
+  }, [lang]);
+
+  useEffect(() => {
+    if (user) {
+      setProfileUsername(user.displayName || "");
+      setProfileEmail(user.email || "");
+    }
+  }, [user]);
 
   const haptic = () => { try { if (navigator.vibrate) navigator.vibrate(10); } catch {} };
   const [editTitle,     setEditTitle]     = useState(false);
@@ -485,6 +587,25 @@ export default function App() {
     })).sort((a,b)=>b.amount-a.amount);
   };
 
+  const getChartDataByCategory = (group) => {
+    const totals = {};
+    (group.expenses||[]).forEach(exp => {
+      const cat = exp.category || "otro";
+      totals[cat] = (totals[cat]||0) + exp.amount;
+    });
+    const total = Object.values(totals).reduce((s,v)=>s+v,0);
+    return Object.keys(totals).map((code,i) => {
+      const cat = getCategory(code);
+      return {
+        name:   cat.label,
+        icon:   cat.icon,
+        amount: totals[code],
+        pct:    total>0?Math.round((totals[code]/total)*100):0,
+        color:  CHART_COLORS[i%CHART_COLORS.length]
+      };
+    }).sort((a,b)=>b.amount-a.amount);
+  };
+
   // ── Compartir ────────────────────────────────────────────────────────────────
   const shareGroup = useCallback(() => {
     if (!active) return;
@@ -552,7 +673,48 @@ export default function App() {
     } finally { setAuthLoading2(false); }
   };
 
-  const logout = async () => { await signOut(auth); setGroups([]); setScreen("home"); setShowProfile(false); };
+  const logout = async () => { await signOut(auth); setGroups([]); setScreen("home"); setShowProfile(false); setShowSettings(false); };
+
+  const handleProfilePhotoSelect = (file) => {
+    if (!file) return;
+    setProfilePhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setProfilePhotoPreview(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfile = async () => {
+    setProfileSaving(true); setProfileError(""); setProfileSaved(false);
+    try {
+      let photoURL = user.photoURL;
+      if (profilePhotoFile) {
+        try { photoURL = await uploadReceipt(profilePhotoFile); }
+        catch { /* si Cloudinary no está configurado, seguimos sin la foto */ }
+      }
+      const cleanUsername = sanitize(profileUsername, 30);
+      if (cleanUsername && (cleanUsername !== user.displayName || photoURL !== user.photoURL)) {
+        await updateProfile(auth.currentUser, { displayName: cleanUsername, photoURL });
+      }
+      if (profilePass && profilePass.length >= 6) {
+        await updatePassword(auth.currentUser, profilePass);
+      } else if (profilePass && profilePass.length > 0) {
+        setProfileError("La contraseña debe tener al menos 6 caracteres.");
+        setProfileSaving(false);
+        return;
+      }
+      setUser({ ...auth.currentUser });
+      setProfilePass("");
+      setProfilePhotoFile(null);
+      setProfilePhotoPreview(null);
+      setProfileSaved(true);
+      setTimeout(()=>setProfileSaved(false), 2500);
+    } catch (e) {
+      if (e.code==="auth/requires-recent-login") setProfileError("Por seguridad, volvé a iniciar sesión para cambiar la contraseña.");
+      else setProfileError("Error al guardar los cambios.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   // ── Helpers UI ───────────────────────────────────────────────────────────────
   const getPerson   = (group,id) => (group.people||[]).find(p=>p.id===id);
@@ -561,7 +723,8 @@ export default function App() {
   const openGroups  = groups.filter(g=>!g.closed);
   const balances    = active?getBalances(active):{};
   const settlements = active?getSettlements(active):[];
-  const chartData   = active?getChartData(active):[];
+  const chartData    = active?getChartData(active):[];
+  const chartDataCat = active?getChartDataByCategory(active):[];
   const curSymbol   = active?getCurSymbol(active.currency||"UYU"):"$";
 
   const Avatar = ({ name, photo, color, bg, size=36 }) => (
@@ -573,7 +736,7 @@ export default function App() {
   );
 
   // ── Donut chart SVG ──────────────────────────────────────────────────────────
-  const DonutChart = ({ data, size=160 }) => {
+  const DonutChart = ({ data, size=160, textColor="#1a1a1a" }) => {
     const total = data.reduce((s,d)=>s+d.amount,0);
     if (total===0) return null;
     const cx=size/2, cy=size/2, r=size*0.35, stroke=size*0.18;
@@ -594,8 +757,8 @@ export default function App() {
           <path key={i} d={s.path} fill="none" stroke={s.color} strokeWidth={stroke} strokeLinecap="butt"
             style={{ transition:"stroke-dasharray 0.6s cubic-bezier(.4,0,.2,1)", opacity: s.pct<0.01?0:1 }} />
         ))}
-        <text x={cx} y={cy-6} textAnchor="middle" fontSize={size*0.11} fontWeight="700" fill="#1a1a1a">{data[0]?.name||""}</text>
-        <text x={cx} y={cy+10} textAnchor="middle" fontSize={size*0.13} fontWeight="800" fill="#1a1a1a">{data[0]?.pct||0}%</text>
+        <text x={cx} y={cy-6} textAnchor="middle" fontSize={size*0.11} fontWeight="700" fill={textColor}>{data[0]?.name||""}</text>
+        <text x={cx} y={cy+10} textAnchor="middle" fontSize={size*0.13} fontWeight="800" fill={textColor}>{data[0]?.pct||0}%</text>
       </svg>
     );
   };
@@ -625,46 +788,51 @@ export default function App() {
       <div style={{ padding:"60px 24px 0", textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center" }}>
         <OweeLogomark size={56} />
         <div style={{ fontSize:42, fontWeight:800, letterSpacing:"-2px", color:"#1a1a1a", marginTop:16, lineHeight:1 }}>Owee</div>
-        <div style={{ fontSize:15, color:"#bbb", marginTop:8, marginBottom:40 }}>Dividí gastos sin drama</div>
+        <div style={{ fontSize:15, color:"#bbb", marginTop:8, marginBottom:40 }}>{t("tagline")}</div>
       </div>
       <div className="su" style={{ background:"white", borderRadius:"24px 24px 0 0", padding:"32px 24px 48px", boxShadow:"0 -4px 40px rgba(0,0,0,0.08)" }}>
         <div style={{ display:"flex", gap:0, marginBottom:24, background:"#f7f7f5", borderRadius:12, padding:4 }}>
           {["login","register"].map(s => (
             <button key={s} onClick={()=>{setAuthScreen(s);setAuthError("");}}
               style={{ flex:1, padding:"9px 0", border:"none", borderRadius:9, fontWeight:700, fontSize:14, cursor:"pointer", background:authScreen===s?"white":"transparent", color:authScreen===s?"#1a1a1a":"#bbb", boxShadow:authScreen===s?"0 1px 4px rgba(0,0,0,0.08)":"none", transition:"all 0.15s" }}>
-              {s==="login"?"Iniciar sesión":"Crear cuenta"}
+              {s==="login"?t("login"):t("createAccount")}
             </button>
           ))}
         </div>
 
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {authScreen==="register" && (
-            <input placeholder="Nombre de usuario" value={authUsername} onChange={e=>setAuthUsername(e.target.value)} maxLength={30} />
+            <input placeholder={t("username")} value={authUsername} onChange={e=>setAuthUsername(e.target.value)} maxLength={30} />
           )}
-          <input placeholder="Email" type="email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} />
-          <input placeholder="Contraseña" type="password" value={authPass} onChange={e=>setAuthPass(e.target.value)}
+          <input placeholder={t("email")} type="email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} />
+          <input placeholder={t("password")} type="password" value={authPass} onChange={e=>setAuthPass(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&(authScreen==="login"?loginEmail():registerEmail())} />
 
           {authError && <div style={{ fontSize:13, color:"#E8734A", textAlign:"center" }}>{authError}</div>}
 
           <button className="btn" onClick={authScreen==="login"?loginEmail:registerEmail} disabled={authLoading2} style={{ marginTop:4 }}>
-            {authLoading2?"...":authScreen==="login"?"Entrar":"Crear cuenta"}
+            {authLoading2?"...":authScreen==="login"?t("enter"):t("createAccount")}
           </button>
 
           <div style={{ display:"flex", alignItems:"center", gap:12, margin:"4px 0" }}>
             <div style={{ flex:1, height:1, background:"#f0f0ed" }}/>
-            <span style={{ fontSize:12, color:"#bbb" }}>o</span>
+            <span style={{ fontSize:12, color:"#bbb" }}>{t("or")}</span>
             <div style={{ flex:1, height:1, background:"#f0f0ed" }}/>
           </div>
 
           <button onClick={loginGoogle} disabled={authLoading2}
             style={{ background:"white", border:"1.5px solid #e8e8e5", borderRadius:14, padding:14, fontSize:15, fontWeight:600, cursor:"pointer", width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:10, transition:"all 0.15s" }}>
             <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-            Continuar con Google
+            {t("continueGoogle")}
           </button>
 
+          <div style={{ display:"flex", gap:8, marginTop:6 }}>
+            <button onClick={()=>setLang("es")} style={{ flex:1, padding:"6px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", background:lang==="es"?"#f0f0ed":"transparent", color:lang==="es"?"#1a1a1a":"#bbb" }}>🇺🇾 ES</button>
+            <button onClick={()=>setLang("en")} style={{ flex:1, padding:"6px 0", border:"none", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", background:lang==="en"?"#f0f0ed":"transparent", color:lang==="en"?"#1a1a1a":"#bbb" }}>🇺🇸 EN</button>
+          </div>
+
           <div style={{ fontSize:12, color:"#bbb", textAlign:"center", marginTop:8 }}>
-            Al registrarte aceptás los términos de uso de Owee
+            {t("termsNotice")}
           </div>
         </div>
       </div>
@@ -711,12 +879,12 @@ export default function App() {
                   <h1 style={{ fontSize:32, fontWeight:800, color:"white", letterSpacing:"-1.5px", lineHeight:1 }}>Owee</h1>
                   <span style={{ fontSize:11, color:"rgba(255,255,255,0.28)", marginTop:4 }}>by patro</span>
                 </div>
-                <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>Dividí gastos sin drama</div>
+                <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>{t("tagline")}</div>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <button onClick={()=>setDarkMode(d=>!d)}
+                <button onClick={()=>setShowSettings(true)}
                   style={{ background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.2)", borderRadius:50, width:36, height:36, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:16 }}>
-                  {darkMode?"☀️":"🌙"}
+                  ⚙️
                 </button>
                 <button onClick={()=>setShowProfile(true)} style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
                   <Avatar name={user.displayName||user.email} photo={user.photoURL} size={38} color="#fff" bg="rgba(255,255,255,0.15)" />
@@ -724,8 +892,8 @@ export default function App() {
               </div>
             </div>
             <div style={{ display:"flex", gap:10, marginTop:22 }}>
-              <button className="pill" style={{ background:"white", color:"#1a1a1a", fontSize:14, padding:"11px 20px" }} onClick={()=>setShowNewModal(true)}>+ Nuevo grupo</button>
-              <button className="pill" style={{ background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.2)", color:"white", fontSize:14, padding:"11px 20px" }} onClick={()=>setShowJoinModal(true)}>Unirse</button>
+              <button className="pill" style={{ background:"white", color:"#1a1a1a", fontSize:14, padding:"11px 20px" }} onClick={()=>setShowNewModal(true)}>+ {t("newGroup")}</button>
+              <button className="pill" style={{ background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.2)", color:"white", fontSize:14, padding:"11px 20px" }} onClick={()=>setShowJoinModal(true)}>{t("join")}</button>
             </div>
           </div>
 
@@ -733,12 +901,12 @@ export default function App() {
             {openGroups.length===0 ? (
               <div style={{ textAlign:"center", padding:"70px 0" }}>
                 <div style={{ fontSize:44, marginBottom:14 }}>🧾</div>
-                <div style={{ fontSize:16, color:T.textSub, fontWeight:600 }}>No tenés grupos activos</div>
-                <div style={{ fontSize:13, color:T.textMuted, marginTop:6 }}>Creá uno o unite con un código</div>
+                <div style={{ fontSize:16, color:T.textSub, fontWeight:600 }}>{t("noActiveGroups")}</div>
+                <div style={{ fontSize:13, color:T.textMuted, marginTop:6 }}>{t("createOrJoin")}</div>
               </div>
             ) : (
               <>
-                <div style={{ fontSize:12, fontWeight:700, color:T.textMuted, letterSpacing:0.8, textTransform:"uppercase", marginBottom:14 }}>Activos</div>
+                <div style={{ fontSize:12, fontWeight:700, color:T.textMuted, letterSpacing:0.8, textTransform:"uppercase", marginBottom:14 }}>{t("active")}</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   {openGroups.map(g => {
                     const sym=getCurSymbol(g.currency||"UYU");
@@ -747,17 +915,17 @@ export default function App() {
                         <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
                           <div>
                             <div style={{ fontWeight:700, fontSize:16, color:T.text }}>{g.title}</div>
-                            <div style={{ fontSize:12, color:T.textMuted, marginTop:2 }}>{g.createdAt} · {(g.expenses||[]).length} gastos · {g.currency||"UYU"}</div>
+                            <div style={{ fontSize:12, color:T.textMuted, marginTop:2 }}>{g.createdAt} · {(g.expenses||[]).length} {t("expenses")} · {g.currency||"UYU"}</div>
                           </div>
                           <div style={{ textAlign:"right" }}>
-                            <div style={{ fontWeight:800, fontSize:20 }}>{sym}{totalGastos(g).toFixed(2)}</div>
-                            <div style={{ fontSize:11, color:T.textMuted }}>total</div>
+                            <div style={{ fontWeight:800, fontSize:20, color:T.text }}>{sym}{totalGastos(g).toFixed(2)}</div>
+                            <div style={{ fontSize:11, color:T.textMuted }}>{t("total")}</div>
                           </div>
                         </div>
                         <div className="row" style={{ gap:6 }}>
                           {(g.people||[]).slice(0,6).map(p=><Avatar key={p.id} name={p.name} color={p.color} bg={p.bg} size={28}/>)}
-                          {(g.people||[]).length>6&&<div style={{ width:28,height:28,borderRadius:"50%",background:"#f0f0ed",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#999",fontWeight:700 }}>+{g.people.length-6}</div>}
-                          {(g.people||[]).length===0&&<div style={{ fontSize:12,color:T.textMuted }}>Sin personas</div>}
+                          {(g.people||[]).length>6&&<div style={{ width:28,height:28,borderRadius:"50%",background:T.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:T.textMuted,fontWeight:700 }}>+{g.people.length-6}</div>}
+                          {(g.people||[]).length===0&&<div style={{ fontSize:12,color:T.textMuted }}>{t("noPeople")}</div>}
                         </div>
                       </motion.div>
                     );
@@ -775,14 +943,14 @@ export default function App() {
           <div style={{ background:T.surface, borderBottom:`1px solid ${T.border}` }}>
             <div style={{ padding:"52px 24px 0" }}>
               <div className="row" style={{ justifyContent:"space-between", marginBottom:6 }}>
-                <button onClick={()=>setScreen("home")} style={{ background:"none",border:"none",fontSize:22,cursor:"pointer",padding:"0 10px 0 0" }}>←</button>
+                <button onClick={()=>setScreen("home")} style={{ background:"none",border:"none",fontSize:22,cursor:"pointer",padding:"0 10px 0 0",color:T.text }}>←</button>
                 <div style={{ display:"flex", gap:8 }}>
-                  <button className="pill" style={{ fontSize:12,padding:"6px 14px",background:copied?"#1a1a1a":"white",color:copied?"white":"#1a1a1a",borderColor:copied?"#1a1a1a":"#e8e8e5" }} onClick={shareGroup}>
-                    {copied?"✓ Copiado!":"📋 Compartir"}
+                  <button className="pill" style={{ fontSize:12,padding:"6px 14px",background:copied?T.text:T.surface,color:copied?T.bg:T.text,borderColor:copied?T.text:T.border2 }} onClick={shareGroup}>
+                    {copied?`✓ ${t("copied")}`:`📋 ${t("share")}`}
                   </button>
-                  <button className="pill" style={{ fontSize:12,padding:"6px 14px",color:"#E8734A",borderColor:"#fdeee8" }}
+                  <button className="pill" style={{ fontSize:12,padding:"6px 14px",color:T.orange,borderColor:darkMode?"#3a2a25":"#fdeee8" }}
                     onClick={()=>{ deleteGroup(activeId); setActiveId(null); setScreen("home"); }}>
-                    Eliminar
+                    {t("delete")}
                   </button>
                 </div>
               </div>
@@ -791,29 +959,34 @@ export default function App() {
                 <input value={titleInput} onChange={e=>setTitleInput(e.target.value)}
                   onBlur={()=>{ updateActive(g=>({...g,title:sanitize(titleInput,60)||g.title})); setEditTitle(false); }}
                   onKeyDown={e=>{ if(e.key==="Enter"){updateActive(g=>({...g,title:sanitize(titleInput,60)||g.title}));setEditTitle(false);}}}
-                  autoFocus maxLength={60} style={{ fontSize:22,fontWeight:800,background:"transparent",border:"none",borderBottom:"2px solid #1a1a1a",borderRadius:0,padding:"4px 0",marginBottom:4 }}/>
+                  autoFocus maxLength={60} style={{ fontSize:22,fontWeight:800,background:"transparent",border:"none",borderBottom:`2px solid ${T.text}`,borderRadius:0,padding:"4px 0",marginBottom:4,color:T.text }}/>
               ):(
                 <div onClick={()=>{setTitleInput(active.title);setEditTitle(true);}} style={{ fontSize:22,fontWeight:800,letterSpacing:"-0.5px",marginBottom:2,cursor:"text",color:T.text }}>
                   {active.title}
                 </div>
               )}
               <div className="row" style={{ gap:8, marginBottom:2 }}>
-                <div style={{ fontSize:11,color:"#bbb",fontFamily:"monospace",letterSpacing:0.5 }}>🔑 {active.id}</div>
+                <div style={{ fontSize:11,color:T.textMuted,fontFamily:"monospace",letterSpacing:0.5 }}>🔑 {active.id}</div>
                 <button onClick={()=>{ navigator.clipboard?.writeText(active.id).then(()=>{ setCopiedCode(true); setTimeout(()=>setCopiedCode(false),2000); }).catch(()=>{ const ta=document.createElement("textarea");ta.value=active.id;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.focus();ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),2000); }); }}
-                  style={{ background:copiedCode?"#4CAF82":"#f0f0ed", border:"none", borderRadius:6, padding:"3px 8px", fontSize:11, fontWeight:700, cursor:"pointer", color:copiedCode?"white":"#888", transition:"all 0.2s" }}>
-                  {copiedCode?"✓ copiado":"copiar"}
+                  style={{ background:copiedCode?T.green:T.border, border:"none", borderRadius:6, padding:"3px 8px", fontSize:11, fontWeight:700, cursor:"pointer", color:copiedCode?"white":T.textSub, transition:"all 0.2s" }}>
+                  {copiedCode?`✓ ${t("copy")}`:t("copy")}
                 </button>
               </div>
               <div style={{ fontSize:13,color:T.textMuted,marginBottom:16 }}>
-                {(active.people||[]).length} personas · {curSymbol}{totalGastos(active).toFixed(2)} · {active.currency||"UYU"}
-                {ratesLoading&&<span style={{ marginLeft:6,fontSize:11 }}>↻ cargando cambio...</span>}
+                {(active.people||[]).length} {t("people")} · {curSymbol}{totalGastos(active).toFixed(2)} · {active.currency||"UYU"}
+                {ratesLoading&&<span style={{ marginLeft:6,fontSize:11 }}>↻ ...</span>}
               </div>
             </div>
 
             <div className="tab-bar" style={{ padding:"0 24px" }}>
-              {["gastos","personas","cuentas","gráfica"].map(t=>(
-                <button key={t} onClick={()=>setTab(t)} style={{ flex:1,padding:"12px 0",background:"none",border:"none",fontSize:13,fontWeight:600,cursor:"pointer",color:tab===t?T.text:T.textMuted,borderBottom:tab===t?`2.5px solid ${T.text}`:`2.5px solid transparent`,transition:"all 0.15s" }}>
-                  {t.charAt(0).toUpperCase()+t.slice(1)}
+              {[
+                {key:"gastos", label:t("tabExpenses")},
+                {key:"personas", label:t("tabPeople")},
+                {key:"cuentas", label:t("tabAccounts")},
+                {key:"gráfica", label:t("tabChart")},
+              ].map(tb=>(
+                <button key={tb.key} onClick={()=>setTab(tb.key)} style={{ flex:1,padding:"12px 0",background:"none",border:"none",fontSize:13,fontWeight:600,cursor:"pointer",color:tab===tb.key?T.text:T.textMuted,borderBottom:tab===tb.key?`2.5px solid ${T.text}`:`2.5px solid transparent`,transition:"all 0.15s" }}>
+                  {tb.label}
                 </button>
               ))}
             </div>
@@ -827,27 +1000,27 @@ export default function App() {
                 <div className="card" style={{ padding:20,marginBottom:20, border:editingExpId?`2px solid ${T.text}`:`1.5px solid ${T.border}` }}>
                   <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
                     <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase" }}>
-                      {editingExpId?"Editando gasto":"Nuevo gasto"}
+                      {editingExpId?t("editingExpense"):t("newExpense")}
                     </div>
                     {editingExpId&&(
-                      <button onClick={resetExpForm} style={{ background:"none",border:"none",fontSize:12,color:T.orange,cursor:"pointer",fontWeight:600 }}>Cancelar</button>
+                      <button onClick={resetExpForm} style={{ background:"none",border:"none",fontSize:12,color:T.orange,cursor:"pointer",fontWeight:600 }}>{t("cancel")}</button>
                     )}
                   </div>
                   <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                    <input placeholder="Descripción (pizza, taxi...)" value={newExp.desc} onChange={e=>setNewExp(x=>({...x,desc:e.target.value}))} maxLength={100}/>
+                    <input placeholder={t("description")} value={newExp.desc} onChange={e=>setNewExp(x=>({...x,desc:e.target.value}))} maxLength={100}/>
                     <div style={{ display:"flex",gap:10 }}>
                       <div style={{ flex:1,position:"relative" }}>
                         <span style={{ position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:14,color:T.textMuted,pointerEvents:"none" }}>{curSymbol}</span>
                         <input type="number" placeholder="0.00" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:e.target.value}))} style={{ paddingLeft:30 }} min="0" max="999999"/>
                       </div>
                       <select value={newExp.paidBy} onChange={e=>setNewExp(x=>({...x,paidBy:e.target.value}))} style={{ flex:1 }}>
-                        <option value="">¿Quién pagó?</option>
+                        <option value="">{t("whoPaid")}</option>
                         {(active.people||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
 
                     <div>
-                      <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>Categoría:</div>
+                      <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>{t("category")}</div>
                       <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
                         {CATEGORIES.map(c=>(
                           <button key={c.code} onClick={()=>setNewExp(x=>({...x,category:c.code}))} className="pill"
@@ -860,7 +1033,7 @@ export default function App() {
 
                     {(active.people||[]).length>0&&(
                       <div>
-                        <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>Dividir entre:</div>
+                        <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>{t("splitBetween")}</div>
                         <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
                           {(active.people||[]).map(p=>(
                             <button key={p.id} onClick={()=>toggleSplit(p.id)} className="pill"
@@ -868,13 +1041,13 @@ export default function App() {
                               {p.name}
                             </button>
                           ))}
-                          <button className="pill" style={{ padding:"6px 14px",fontSize:12 }} onClick={()=>setNewExp(x=>({...x,splitWith:(active.people||[]).map(p=>p.id)}))}>Todos</button>
+                          <button className="pill" style={{ padding:"6px 14px",fontSize:12 }} onClick={()=>setNewExp(x=>({...x,splitWith:(active.people||[]).map(p=>p.id)}))}>{t("all")}</button>
                         </div>
                       </div>
                     )}
 
                     <div>
-                      <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>Foto del recibo (opcional):</div>
+                      <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>{t("receiptPhoto")}</div>
                       {newExp.receiptUrl?(
                         <div style={{ position:"relative", display:"inline-block" }}>
                           <img src={newExp.receiptUrl} alt="recibo" style={{ width:80,height:80,objectFit:"cover",borderRadius:12,border:`1.5px solid ${T.border}` }}/>
@@ -883,7 +1056,7 @@ export default function App() {
                         </div>
                       ):(
                         <label style={{ display:"inline-flex",alignItems:"center",gap:8,padding:"10px 16px",border:`1.5px dashed ${T.border2}`,borderRadius:12,cursor:"pointer",fontSize:13,color:T.textSub }}>
-                          {uploadingImg?"Subiendo...":"📷 Agregar foto"}
+                          {uploadingImg?t("uploading"):t("addPhoto")}
                           <input type="file" accept="image/*" capture="environment" style={{ display:"none" }}
                             onChange={e=>handleReceiptUpload(e.target.files?.[0])} disabled={uploadingImg}/>
                         </label>
@@ -892,14 +1065,14 @@ export default function App() {
                     </div>
 
                     <button className="btn" onClick={addExpense} disabled={(active.people||[]).length===0} style={{ marginTop:4 }}>
-                      {(active.people||[]).length===0?"Primero agregá personas":editingExpId?"Guardar cambios":"Agregar gasto"}
+                      {(active.people||[]).length===0?t("addFirst"):editingExpId?t("saveChanges"):t("addExpenseBtn")}
                     </button>
                   </div>
                 </div>
 
                 <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                   {(active.expenses||[]).length===0?(
-                    <div style={{ textAlign:"center",padding:"40px 0",color:T.textMuted,fontSize:14 }}>Sin gastos todavía</div>
+                    <div style={{ textAlign:"center",padding:"40px 0",color:T.textMuted,fontSize:14 }}>{t("noExpensesYet")}</div>
                   ):[...(active.expenses||[])].reverse().map(exp=>{
                     const payer=getPerson(active,exp.paidBy);
                     const share=(exp.amount/exp.splitWith.length).toFixed(2);
@@ -921,7 +1094,7 @@ export default function App() {
                               </div>
                               <div className="row" style={{ gap:8 }}>
                                 {payer&&<Avatar name={payer.name} color={payer.color} bg={payer.bg} size={18}/>}
-                                <span style={{ fontSize:12,color:T.textSub }}>pagó {payer?.name} · ÷{exp.splitWith.length} = {curSymbol}{share} c/u</span>
+                                <span style={{ fontSize:12,color:T.textSub }}>{t("paid")} {payer?.name} · ÷{exp.splitWith.length} = {curSymbol}{share} c/u</span>
                               </div>
                             </div>
                           </div>
@@ -946,15 +1119,15 @@ export default function App() {
             {tab==="personas"&&(
               <div className="fi">
                 <div className="card" style={{ padding:20,marginBottom:20 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Agregar persona</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>{t("addPerson")}</div>
                   <div style={{ display:"flex",gap:10 }}>
-                    <input placeholder="Nombre" value={newPerson} onChange={e=>setNewPerson(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPerson()} style={{ flex:1 }} maxLength={40}/>
+                    <input placeholder={t("name")} value={newPerson} onChange={e=>setNewPerson(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addPerson()} style={{ flex:1 }} maxLength={40}/>
                     <button className="btn" onClick={addPerson} style={{ width:"auto",padding:"12px 20px" }}>+</button>
                   </div>
                 </div>
                 <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
                   {(active.people||[]).length===0?(
-                    <div style={{ textAlign:"center",padding:"40px 0",color:"#bbb",fontSize:14 }}>Agregá a las personas del grupo</div>
+                    <div style={{ textAlign:"center",padding:"40px 0",color:T.textMuted,fontSize:14 }}>{t("addPersonPrompt")}</div>
                   ):(active.people||[]).map(p=>{
                     const bal=balances[p.id]||0;
                     return (
@@ -985,9 +1158,9 @@ export default function App() {
             {tab==="cuentas"&&(
               <div className="fi">
                 <div className="card" style={{ padding:20,marginBottom:16 }}>
-                  <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Balances</div>
+                  <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>{t("balances")}</div>
                   {(active.people||[]).length===0?(
-                    <div style={{ fontSize:14,color:T.textMuted,textAlign:"center",padding:"16px 0" }}>Agregá personas primero</div>
+                    <div style={{ fontSize:14,color:T.textMuted,textAlign:"center",padding:"16px 0" }}>{t("addPeopleFirst")}</div>
                   ):(active.people||[]).map(p=>{
                     const bal=balances[p.id]||0;
                     return (
@@ -997,7 +1170,7 @@ export default function App() {
                           <span style={{ fontWeight:600,fontSize:14,color:T.text }}>{p.name}</span>
                         </div>
                         <div style={{ fontWeight:700,fontSize:14,color:bal>0.01?T.green:bal<-0.01?T.orange:T.textMuted }}>
-                          {bal>0.01?`le deben ${curSymbol}${bal.toFixed(2)}`:bal<-0.01?`debe ${curSymbol}${Math.abs(bal).toFixed(2)}`:"al día ✓"}
+                          {bal>0.01?`${t("owed")} ${curSymbol}${bal.toFixed(2)}`:bal<-0.01?`${t("owes")} ${curSymbol}${Math.abs(bal).toFixed(2)}`:t("upToDate")}
                         </div>
                       </div>
                     );
@@ -1006,16 +1179,16 @@ export default function App() {
 
                 <div className="card" style={{ padding:20,marginBottom:16 }}>
                   <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
-                    <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase" }}>¿Quién paga a quién?</div>
+                    <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase" }}>{t("whoOwesWhom")}</div>
                     {settlements.length>0&&(
-                      <div style={{ fontSize:11,color:"#bbb" }}>
-                        {settlements.filter((_,i)=>(active.paidSettlements||{})[`${i}`]).length}/{settlements.length} pagados
+                      <div style={{ fontSize:11,color:T.textMuted }}>
+                        {settlements.filter((_,i)=>(active.paidSettlements||{})[`${i}`]).length}/{settlements.length} {t("markedPaid")}
                       </div>
                     )}
                   </div>
                   {settlements.length===0?(
-                    <div style={{ fontSize:14,color:"#bbb",textAlign:"center",padding:"16px 0" }}>
-                      {(active.people||[]).length===0?"Agregá personas y gastos":"✓ Todos al día"}
+                    <div style={{ fontSize:14,color:T.textMuted,textAlign:"center",padding:"16px 0" }}>
+                      {(active.people||[]).length===0?t("addPeopleAndExpenses"):t("allSettled")}
                     </div>
                   ):settlements.map((s,i)=>{
                     const from=getPerson(active,s.from);
@@ -1024,34 +1197,34 @@ export default function App() {
                     const key=`${i}`;
                     const paid=(active.paidSettlements||{})[key];
                     return (
-                      <div key={i} style={{ background:paid?"#f0faf5":"#f7f7f5",borderRadius:14,padding:"12px 14px",marginBottom:8,transition:"background 0.3s",border:paid?"1.5px solid #c8eedd":"1.5px solid transparent" }}>
+                      <div key={i} style={{ background:paid?T.paidBg:T.rowBg,borderRadius:14,padding:"12px 14px",marginBottom:8,transition:"background 0.3s",border:paid?`1.5px solid ${T.paidBorder}`:"1.5px solid transparent" }}>
                         <div className="row" style={{ justifyContent:"space-between",marginBottom:6 }}>
                           <div className="row" style={{ gap:8 }}>
                             <Avatar name={from.name} color={from.color} bg={from.bg} size={26}/>
                             <span style={{ fontSize:14,fontWeight:600,textDecoration:paid?"line-through":"none",color:paid?T.textMuted:T.text }}>{from.name}</span>
                           </div>
                           <div className="row" style={{ gap:10 }}>
-                            <span style={{ fontWeight:800,fontSize:17,color:paid?"#aaa":"#1a1a1a",textDecoration:paid?"line-through":"none" }}>{curSymbol}{s.amount.toFixed(2)}</span>
+                            <span style={{ fontWeight:800,fontSize:17,color:paid?T.textMuted:T.text,textDecoration:paid?"line-through":"none" }}>{curSymbol}{s.amount.toFixed(2)}</span>
                             <button onClick={()=>{ haptic(); toggleSettlement(key); }}
-                              style={{ width:28,height:28,borderRadius:"50%",border:`2px solid ${paid?"#4CAF82":"#ddd"}`,background:paid?"#4CAF82":"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s" }}>
+                              style={{ width:28,height:28,borderRadius:"50%",border:`2px solid ${paid?T.green:T.border2}`,background:paid?T.green:T.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s" }}>
                               {paid&&<span style={{ color:"white",fontSize:14,fontWeight:700 }}>✓</span>}
                             </button>
                           </div>
                         </div>
                         <div className="row" style={{ gap:6,paddingLeft:4 }}>
-                          <span style={{ fontSize:12,color:"#bbb" }}>→ para</span>
+                          <span style={{ fontSize:12,color:T.textMuted }}>→ para</span>
                           <Avatar name={to.name} color={to.color} bg={to.bg} size={20}/>
                           <span style={{ fontSize:13,fontWeight:600,color:paid?T.textMuted:T.textSub }}>{to.name}</span>
                         </div>
                         {paid&&(
-                          <div style={{ fontSize:11,color:T.green,fontWeight:600,marginTop:6,paddingLeft:4 }}>✓ Pagado</div>
+                          <div style={{ fontSize:11,color:T.green,fontWeight:600,marginTop:6,paddingLeft:4 }}>{t("paidLabel")}</div>
                         )}
                       </div>
                     );
                   })}
                   {settlements.length>0&&settlements.every((_,i)=>(active.paidSettlements||{})[`${i}`])&&(
                     <div style={{ textAlign:"center",padding:"12px 0 4px",fontSize:14,fontWeight:700,color:T.green }}>
-                      🎉 ¡Todos los pagos completados!
+                      {t("allDone")}
                     </div>
                   )}
                 </div>
@@ -1060,17 +1233,17 @@ export default function App() {
                 {(active.expenses||[]).length>0&&(
                   <div className="card" style={{ padding:20, background:T.surface, border:`1.5px solid ${T.border}` }}>
                     <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
-                      <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase" }}>Equivalencias</div>
+                      <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase" }}>{t("equivalences")}</div>
                       {ratesLoading
-                        ? <span style={{ fontSize:11,color:T.textMuted }}>↻ cargando...</span>
+                        ? <span style={{ fontSize:11,color:T.textMuted }}>↻ ...</span>
                         : <button onClick={()=>{ setRates({}); fetchRates(active.currency||"UYU"); }}
                             style={{ background:"none",border:"none",fontSize:11,color:T.textMuted,cursor:"pointer",textDecoration:"underline" }}>
-                            actualizar
+                            {t("update")}
                           </button>
                       }
                     </div>
                     {ratesLoading?(
-                      <div style={{ padding:"16px 0",textAlign:"center",color:T.textMuted,fontSize:13 }}>Cargando tasas...</div>
+                      <div style={{ padding:"16px 0",textAlign:"center",color:T.textMuted,fontSize:13 }}>{t("loadingRates")}</div>
                     ):CURRENCIES.filter(c=>c.code!==(active.currency||"UYU")).map(c=>{
                       const converted=convertAmount(totalGastos(active),active.currency||"UYU",c.code);
                       const isLive=!!(rates[active.currency||"UYU"]?.[c.code]);
@@ -1082,11 +1255,11 @@ export default function App() {
                           </div>
                           <div style={{ textAlign:"right" }}>
                             {converted===null?(
-                              <div style={{ fontWeight:600,fontSize:13,color:T.textMuted }}>no disponible</div>
+                              <div style={{ fontWeight:600,fontSize:13,color:T.textMuted }}>{t("notAvailable")}</div>
                             ):(
                               <>
                                 <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{c.symbol}{converted.toFixed(2)}</div>
-                                {!isLive&&<div style={{ fontSize:10,color:T.textMuted }}>referencia</div>}
+                                {!isLive&&<div style={{ fontSize:10,color:T.textMuted }}>{t("reference")}</div>}
                               </>
                             )}
                           </div>
@@ -1094,7 +1267,7 @@ export default function App() {
                       );
                     })}
                     <div style={{ fontSize:11,color:T.textMuted,marginTop:10 }}>
-                      {Object.keys(rates).length>0?"Tasas en tiempo real cuando están disponibles":"Tasas de referencia"}
+                      {Object.keys(rates).length>0?t("liveRates"):t("refRates")}
                     </div>
                   </div>
                 )}
@@ -1107,13 +1280,13 @@ export default function App() {
                 {chartData.length===0||totalGastos(active)===0?(
                   <div style={{ textAlign:"center",padding:"60px 0",color:T.textMuted,fontSize:14 }}>
                     <div style={{ fontSize:36,marginBottom:12 }}>📊</div>
-                    Agregá gastos para ver la gráfica
+                    {t("addExpensesForChart")}
                   </div>
                 ):(
                   <>
                     <div className="card" style={{ padding:24,marginBottom:16,display:"flex",flexDirection:"column",alignItems:"center" }}>
-                      <div style={{ fontSize:12,fontWeight:700,color:"#bbb",letterSpacing:0.6,textTransform:"uppercase",marginBottom:20,alignSelf:"flex-start" }}>Gasto por persona</div>
-                      <DonutChart data={chartData} size={180}/>
+                      <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:20,alignSelf:"flex-start" }}>{t("expenseByPerson")}</div>
+                      <DonutChart data={chartData} size={180} textColor={T.text}/>
                       <div style={{ width:"100%",marginTop:24,display:"flex",flexDirection:"column",gap:10 }}>
                         {chartData.map((d,i)=>(
                           <div key={i}>
@@ -1124,10 +1297,10 @@ export default function App() {
                               </div>
                               <div className="row" style={{ gap:8 }}>
                                 <span style={{ fontSize:13,color:T.textSub }}>{curSymbol}{d.amount.toFixed(2)}</span>
-                                <span style={{ fontSize:13,fontWeight:700,minWidth:36,textAlign:"right" }}>{d.pct}%</span>
+                                <span style={{ fontSize:13,fontWeight:700,minWidth:36,textAlign:"right",color:T.text }}>{d.pct}%</span>
                               </div>
                             </div>
-                            <div style={{ height:6,background:"#f0f0ed",borderRadius:3,overflow:"hidden" }}>
+                            <div style={{ height:6,background:T.border,borderRadius:3,overflow:"hidden" }}>
                               <div style={{ height:"100%",width:`${d.pct}%`,background:d.color,borderRadius:3,transition:"width 0.6s cubic-bezier(.4,0,.2,1)" }}/>
                             </div>
                           </div>
@@ -1135,18 +1308,44 @@ export default function App() {
                       </div>
                     </div>
 
+                    {chartDataCat.length>0&&(
+                      <div className="card" style={{ padding:24,marginBottom:16,display:"flex",flexDirection:"column",alignItems:"center" }}>
+                        <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:20,alignSelf:"flex-start" }}>{t("expenseByCategory")}</div>
+                        <DonutChart data={chartDataCat} size={180} textColor={T.text}/>
+                        <div style={{ width:"100%",marginTop:24,display:"flex",flexDirection:"column",gap:10 }}>
+                          {chartDataCat.map((d,i)=>(
+                            <div key={i}>
+                              <div className="row" style={{ justifyContent:"space-between",marginBottom:6 }}>
+                                <div className="row" style={{ gap:8 }}>
+                                  <div style={{ width:10,height:10,borderRadius:"50%",background:d.color,flexShrink:0 }}/>
+                                  <span style={{ fontSize:14,fontWeight:600,color:T.text }}>{d.icon} {d.name}</span>
+                                </div>
+                                <div className="row" style={{ gap:8 }}>
+                                  <span style={{ fontSize:13,color:T.textSub }}>{curSymbol}{d.amount.toFixed(2)}</span>
+                                  <span style={{ fontSize:13,fontWeight:700,minWidth:36,textAlign:"right",color:T.text }}>{d.pct}%</span>
+                                </div>
+                              </div>
+                              <div style={{ height:6,background:T.border,borderRadius:3,overflow:"hidden" }}>
+                                <div style={{ height:"100%",width:`${d.pct}%`,background:d.color,borderRadius:3,transition:"width 0.6s cubic-bezier(.4,0,.2,1)" }}/>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="card" style={{ padding:20 }}>
-                      <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>Resumen</div>
+                      <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:14 }}>{t("summary")}</div>
                       <div className="row" style={{ justifyContent:"space-between",marginBottom:8 }}>
-                        <span style={{ fontSize:14,color:T.textSub }}>Total gastado</span>
+                        <span style={{ fontSize:14,color:T.textSub }}>{t("totalSpent")}</span>
                         <span style={{ fontWeight:800,fontSize:16,color:T.text }}>{curSymbol}{totalGastos(active).toFixed(2)}</span>
                       </div>
                       <div className="row" style={{ justifyContent:"space-between",marginBottom:8 }}>
-                        <span style={{ fontSize:14,color:T.textSub }}>Promedio por persona</span>
-                        <span style={{ fontWeight:700,fontSize:14 }}>{curSymbol}{((active.people||[]).length>0?totalGastos(active)/(active.people||[]).length:0).toFixed(2)}</span>
+                        <span style={{ fontSize:14,color:T.textSub }}>{t("avgPerPerson")}</span>
+                        <span style={{ fontWeight:700,fontSize:14,color:T.text }}>{curSymbol}{((active.people||[]).length>0?totalGastos(active)/(active.people||[]).length:0).toFixed(2)}</span>
                       </div>
                       <div className="row" style={{ justifyContent:"space-between" }}>
-                        <span style={{ fontSize:14,color:T.textSub }}>Cantidad de gastos</span>
+                        <span style={{ fontSize:14,color:T.textSub }}>{t("expenseCount")}</span>
                         <span style={{ fontWeight:700,fontSize:14,color:T.text }}>{(active.expenses||[]).length}</span>
                       </div>
                     </div>
@@ -1164,15 +1363,15 @@ export default function App() {
       {showNewModal&&(
         <div className="modal-bg fi" onClick={e=>{if(e.target===e.currentTarget)setShowNewModal(false)}}>
           <div className="modal" style={{ background:T.surface }}>
-            <div style={{ fontWeight:800,fontSize:20,marginBottom:6,color:T.text }}>Nuevo grupo</div>
-            <div style={{ fontSize:13,color:"#bbb",marginBottom:20 }}>Dale un nombre y elegí la moneda</div>
+            <div style={{ fontWeight:800,fontSize:20,marginBottom:6,color:T.text }}>{t("newGroupTitle")}</div>
+            <div style={{ fontSize:13,color:T.textMuted,marginBottom:20 }}>{t("nameGroup")}</div>
             <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-              <input placeholder='Ej: "Asado", "Viaje a Colonia"...' value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createGroup()} autoFocus maxLength={60}/>
+              <input placeholder={t("groupNamePlaceholder")} value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createGroup()} autoFocus maxLength={60}/>
               <select value={newGroupCur} onChange={e=>setNewGroupCur(e.target.value)}>
                 {CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.symbol} {c.name} ({c.code})</option>)}
               </select>
-              <button className="btn" onClick={createGroup} style={{ marginTop:4 }}>Crear grupo</button>
-              <button onClick={()=>setShowNewModal(false)} style={{ background:"none",border:"none",width:"100%",padding:"14px",fontSize:14,color:"#bbb",cursor:"pointer" }}>Cancelar</button>
+              <button className="btn" onClick={createGroup} style={{ marginTop:4 }}>{t("createGroupBtn")}</button>
+              <button onClick={()=>setShowNewModal(false)} style={{ background:"none",border:"none",width:"100%",padding:"14px",fontSize:14,color:T.textMuted,cursor:"pointer" }}>{t("cancel")}</button>
             </div>
           </div>
         </div>
@@ -1182,12 +1381,12 @@ export default function App() {
       {showJoinModal&&(
         <div className="modal-bg fi" onClick={e=>{if(e.target===e.currentTarget){setShowJoinModal(false);setJoinError("");}}}>
           <div className="modal" style={{ background:T.surface }}>
-            <div style={{ fontWeight:800,fontSize:20,marginBottom:6,color:T.text }}>Unirse a un grupo</div>
-            <div style={{ fontSize:13,color:"#bbb",marginBottom:20 }}>Pedile el código a quien creó el grupo</div>
-            <input placeholder="Código del grupo (6 caracteres)" value={joinCode} onChange={e=>{setJoinCode(e.target.value.toUpperCase());setJoinError("");}} onKeyDown={e=>e.key==="Enter"&&joinGroup()} autoFocus style={{ marginBottom:joinError?8:14,fontFamily:"monospace",letterSpacing:1 }}/>
-            {joinError&&<div style={{ fontSize:13,color:"#E8734A",marginBottom:14 }}>{joinError}</div>}
-            <button className="btn" onClick={joinGroup}>Unirme</button>
-            <button onClick={()=>{setShowJoinModal(false);setJoinError("");}} style={{ background:"none",border:"none",width:"100%",padding:"14px",fontSize:14,color:"#bbb",cursor:"pointer",marginTop:4 }}>Cancelar</button>
+            <div style={{ fontWeight:800,fontSize:20,marginBottom:6,color:T.text }}>{t("joinGroupTitle")}</div>
+            <div style={{ fontSize:13,color:T.textMuted,marginBottom:20 }}>{t("askCode")}</div>
+            <input placeholder="Código (6 caracteres)" value={joinCode} onChange={e=>{setJoinCode(e.target.value.toUpperCase());setJoinError("");}} onKeyDown={e=>e.key==="Enter"&&joinGroup()} autoFocus style={{ marginBottom:joinError?8:14,fontFamily:"monospace",letterSpacing:1 }}/>
+            {joinError&&<div style={{ fontSize:13,color:T.orange,marginBottom:14 }}>{joinError}</div>}
+            <button className="btn" onClick={joinGroup}>{t("joinBtn")}</button>
+            <button onClick={()=>{setShowJoinModal(false);setJoinError("");}} style={{ background:"none",border:"none",width:"100%",padding:"14px",fontSize:14,color:T.textMuted,cursor:"pointer",marginTop:4 }}>{t("cancel")}</button>
           </div>
         </div>
       )}
@@ -1209,18 +1408,95 @@ export default function App() {
             <div style={{ display:"flex",alignItems:"center",gap:16,marginBottom:24 }}>
               <Avatar name={user.displayName||user.email} photo={user.photoURL} size={56}/>
               <div>
-                <div style={{ fontWeight:800,fontSize:18 }}>{user.displayName||"Usuario"}</div>
-                <div style={{ fontSize:13,color:"#bbb",marginTop:2 }}>{user.email}</div>
+                <div style={{ fontWeight:800,fontSize:18,color:T.text }}>{user.displayName||"Usuario"}</div>
+                <div style={{ fontSize:13,color:T.textMuted,marginTop:2 }}>{user.email}</div>
               </div>
             </div>
-            <div style={{ background:T.rowBg,borderRadius:14,padding:"14px 16px",marginBottom:20 }}>
-              <div style={{ fontSize:12,color:"#bbb",marginBottom:4 }}>Grupos activos</div>
-              <div style={{ fontWeight:800,fontSize:22 }}>{openGroups.length}</div>
+            <div style={{ background:T.rowBg,borderRadius:14,padding:"14px 16px",marginBottom:14 }}>
+              <div style={{ fontSize:12,color:T.textMuted,marginBottom:4 }}>{t("activeGroups")}</div>
+              <div style={{ fontWeight:800,fontSize:22,color:T.text }}>{openGroups.length}</div>
             </div>
-            <button onClick={logout} style={{ background:"none",border:"1.5px solid #fdeee8",borderRadius:14,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",width:"100%",color:"#E8734A" }}>
-              Cerrar sesión
+            <button onClick={()=>{ setShowProfile(false); setShowSettings(true); }}
+              style={{ background:"none",border:`1.5px solid ${T.border2}`,borderRadius:14,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",width:"100%",color:T.text,marginBottom:10 }}>
+              ⚙️ {t("settings")}
             </button>
-            <button onClick={()=>setShowProfile(false)} style={{ background:"none",border:"none",width:"100%",padding:"14px",fontSize:14,color:"#bbb",cursor:"pointer",marginTop:4 }}>Cancelar</button>
+            <button onClick={logout} style={{ background:"none",border:`1.5px solid ${darkMode?"#3a2a25":"#fdeee8"}`,borderRadius:14,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",width:"100%",color:T.orange }}>
+              {t("logout")}
+            </button>
+            <button onClick={()=>setShowProfile(false)} style={{ background:"none",border:"none",width:"100%",padding:"14px",fontSize:14,color:T.textMuted,cursor:"pointer",marginTop:4 }}>{t("cancel")}</button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Configuración */}
+      {showSettings&&(
+        <div className="modal-bg fi" onClick={e=>{if(e.target===e.currentTarget)setShowSettings(false)}}>
+          <div className="modal" style={{ background:T.surface, maxHeight:"85vh", overflowY:"auto" }}>
+            <div className="row" style={{ justifyContent:"space-between", marginBottom:24 }}>
+              <div style={{ fontWeight:800,fontSize:20,color:T.text }}>{t("settingsTitle")}</div>
+              <button onClick={()=>setShowSettings(false)} style={{ background:T.rowBg,border:"none",borderRadius:"50%",width:32,height:32,fontSize:16,cursor:"pointer",color:T.text }}>✕</button>
+            </div>
+
+            {/* Apariencia */}
+            <div style={{ marginBottom:24 }}>
+              <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:12 }}>{t("appearance")}</div>
+              <div className="row" style={{ justifyContent:"space-between", padding:"12px 14px", background:T.rowBg, borderRadius:14 }}>
+                <span style={{ fontSize:14,fontWeight:600,color:T.text }}>{darkMode?t("darkMode"):t("lightMode")}</span>
+                <button onClick={()=>setDarkMode(d=>!d)}
+                  style={{ width:48, height:28, borderRadius:20, background:darkMode?T.text:T.border2, border:"none", cursor:"pointer", position:"relative", transition:"background 0.2s" }}>
+                  <div style={{ width:22, height:22, borderRadius:"50%", background:T.surface, position:"absolute", top:3, left:darkMode?23:3, transition:"left 0.2s", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }}/>
+                </button>
+              </div>
+            </div>
+
+            {/* Idioma */}
+            <div style={{ marginBottom:24 }}>
+              <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:12 }}>{t("language")}</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={()=>setLang("es")} className="pill" style={{ flex:1, padding:"10px 0", background:lang==="es"?T.text:T.surface, color:lang==="es"?T.bg:T.text, borderColor:lang==="es"?T.text:T.border2 }}>
+                  🇺🇾 {t("spanish")}
+                </button>
+                <button onClick={()=>setLang("en")} className="pill" style={{ flex:1, padding:"10px 0", background:lang==="en"?T.text:T.surface, color:lang==="en"?T.bg:T.text, borderColor:lang==="en"?T.text:T.border2 }}>
+                  🇺🇸 {t("english")}
+                </button>
+              </div>
+            </div>
+
+            {/* Detalles de cuenta */}
+            <div>
+              <div style={{ fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:0.6,textTransform:"uppercase",marginBottom:12 }}>{t("accountDetails")}</div>
+
+              <div style={{ display:"flex", justifyContent:"center", marginBottom:16 }}>
+                <label style={{ position:"relative", cursor:"pointer" }}>
+                  <Avatar name={profileUsername||user.email} photo={profilePhotoPreview||user.photoURL} size={72}/>
+                  <div style={{ position:"absolute", bottom:0, right:0, background:T.text, borderRadius:"50%", width:24, height:24, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, border:`2px solid ${T.surface}` }}>
+                    📷
+                  </div>
+                  <input type="file" accept="image/*" style={{ display:"none" }} onChange={e=>handleProfilePhotoSelect(e.target.files?.[0])}/>
+                </label>
+              </div>
+
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11,color:T.textMuted,marginBottom:4 }}>{t("username")}</div>
+                  <input value={profileUsername} onChange={e=>setProfileUsername(e.target.value)} maxLength={30}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11,color:T.textMuted,marginBottom:4 }}>{t("email")}</div>
+                  <input value={profileEmail} disabled style={{ opacity:0.6 }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11,color:T.textMuted,marginBottom:4 }}>{t("newPassword")}</div>
+                  <input type="password" value={profilePass} onChange={e=>setProfilePass(e.target.value)} placeholder="••••••••"/>
+                </div>
+
+                {profileError&&<div style={{ fontSize:13,color:T.orange }}>{profileError}</div>}
+
+                <button className="btn" onClick={saveProfile} disabled={profileSaving} style={{ marginTop:6, background:profileSaved?T.green:T.text }}>
+                  {profileSaving?"...":profileSaved?t("saved"):t("save")}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
