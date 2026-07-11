@@ -171,20 +171,28 @@ const genGroupCode = () => {
 };
 const today     = () => new Date().toLocaleDateString("es-UY");
 const sanitize  = (str, max=80) => String(str||"").trim().slice(0,max);
-const safeAmt   = (val) => { const n=parseFloat(val); return (!isNaN(n)&&n>0&&n<1000000000000000)?n:null; }; // hasta 15 dígitos
+const safeAmt = (val) => {
+  // Limpia espacios, comas de miles, y cualquier caracter que no sea dígito o punto decimal
+  const cleaned = String(val||"").trim().replace(/[^\d.]/g, "");
+  const n = parseFloat(cleaned);
+  return (!isNaN(n)&&n>0&&n<1000000000000000) ? n : null; // hasta 15 dígitos
+};
 
 // Formato de dinero estilo rioplatense: punto para miles, coma para decimales (ej: 1.234,50)
+// Si no tiene centavos, no muestra ",00" (ej: 1.234 en vez de 1.234,00)
 const fmt = (n) => {
-  if (n===null || n===undefined || isNaN(n)) return "0,00";
+  if (n===null || n===undefined || isNaN(n)) return "0";
   const num = Number(n);
   const parts = num.toFixed(2).split(".");
   const intPart = parts[0].replace("-", "");
   const sign = num < 0 ? "-" : "";
   const withDots = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${sign}${withDots},${parts[1]}`;
+  return parts[1]==="00" ? `${sign}${withDots}` : `${sign}${withDots},${parts[1]}`;
 };
-const makeGroup = (title="Nuevo grupo", currency="UYU", createdBy=null) => ({
-  id: genGroupCode(), title, people:[], expenses:[], createdAt:today(), closed:false, currency, createdBy
+const COVER_EMOJIS = ["🧾","🍕","✈️","🏖️","🎉","🏠","🚗","🍻","⚽","🎄","🎂","💼","🛒","🏕️","🎬"];
+
+const makeGroup = (title="Nuevo grupo", currency="UYU", createdBy=null, coverEmoji="🧾") => ({
+  id: genGroupCode(), title, people:[], expenses:[], createdAt:today(), closed:false, currency, createdBy, coverEmoji, coverPhoto:null
 });
 
 const auth     = getAuth();
@@ -304,6 +312,8 @@ export default function App() {
   const [showNewModal,  setShowNewModal]  = useState(false);
   const [newGroupName,  setNewGroupName]  = useState("");
   const [newGroupCur,   setNewGroupCur]   = useState("UYU");
+  const [newGroupCover, setNewGroupCover] = useState("🧾");
+  const [editingCover,  setEditingCover]  = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode,      setJoinCode]      = useState("");
   const [joinError,     setJoinError]     = useState("");
@@ -416,7 +426,7 @@ export default function App() {
 
   const createGroup = () => {
     const name = sanitize(newGroupName, 60) || "Nuevo grupo";
-    const g    = makeGroup(name, newGroupCur, user?.uid || null);
+    const g    = makeGroup(name, newGroupCur, user?.uid || null, newGroupCover);
     setGroups(prev => [...prev, g]);
     saveToFirebase(g);
     subscribeToGroup(g.id);
@@ -426,6 +436,7 @@ export default function App() {
     setShowNewModal(false);
     setNewGroupName("");
     setNewGroupCur("UYU");
+    setNewGroupCover("🧾");
     fetchRates(newGroupCur);
   };
 
@@ -469,6 +480,7 @@ export default function App() {
     setActiveId(id);
     setScreen("group");
     setTab("gastos");
+    setEditingCover(false);
     const g = groups.find(g=>g.id===id);
     if (g?.currency) fetchRates(g.currency);
   };
@@ -479,7 +491,7 @@ export default function App() {
     if (!name||!active||(active.people||[]).find(p=>p.name===name)) return;
     if ((active.people||[]).length>=20) return;
     const idx = (active.people||[]).length;
-    updateActive(g => ({ ...g, people:[...(g.people||[]), { id:genId(), name, color:COLORS[idx%COLORS.length], bg:PASTEL[idx%PASTEL.length], addedBy:user?.uid||null }] }));
+    updateActive(g => ({ ...g, people:[...(g.people||[]), { id:genId(), name, color:COLORS[idx%COLORS.length], bg:PASTEL[idx%PASTEL.length], addedBy:user?.uid||null, addedByName:user?.displayName||user?.email||null }] }));
     setNewPerson("");
   };
 
@@ -510,6 +522,7 @@ export default function App() {
       if ((active.expenses||[]).length>=200) return;
       updateActive(g => ({ ...g, expenses:[...(g.expenses||[]), {
         id:genId(), desc:cleanDesc, amount:cleanAmt, paidBy, splitWith, date:today(), addedBy:user?.uid||null,
+        addedByName:user?.displayName||user?.email||null,
         category:category||"otro", receiptUrl:receiptUrl||null
       }] }));
     }
@@ -924,9 +937,16 @@ export default function App() {
                     return (
                       <motion.div key={g.id} whileTap={{scale:0.97}} onClick={()=>openGroup(g.id)} style={{ padding:"18px 20px", background:T.surface, borderRadius:20, border:`1.5px solid ${T.border}`, cursor:"pointer" }}>
                         <div className="row" style={{ justifyContent:"space-between", marginBottom:14 }}>
-                          <div>
-                            <div style={{ fontWeight:700, fontSize:16, color:T.text }}>{g.title}</div>
-                            <div style={{ fontSize:12, color:T.textMuted, marginTop:2 }}>{g.createdAt} · {(g.expenses||[]).length} {t("expenses")} · {g.currency||"UYU"}</div>
+                          <div className="row" style={{ gap:12 }}>
+                            {g.coverPhoto ? (
+                              <img src={g.coverPhoto} alt="" style={{ width:44,height:44,borderRadius:14,objectFit:"cover",flexShrink:0 }}/>
+                            ) : (
+                              <div style={{ width:44,height:44,borderRadius:14,background:T.rowBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0 }}>{g.coverEmoji||"🧾"}</div>
+                            )}
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:16, color:T.text }}>{g.title}</div>
+                              <div style={{ fontSize:12, color:T.textMuted, marginTop:2 }}>{g.createdAt} · {(g.expenses||[]).length} {t("expenses")} · {g.currency||"UYU"}</div>
+                            </div>
                           </div>
                           <div style={{ textAlign:"right" }}>
                             <div style={{ fontWeight:800, fontSize:20, color:T.text }}>{sym}{fmt(totalGastos(g))}</div>
@@ -966,16 +986,48 @@ export default function App() {
                 </div>
               </div>
 
-              {editTitle?(
-                <input value={titleInput} onChange={e=>setTitleInput(e.target.value)}
-                  onBlur={()=>{ updateActive(g=>({...g,title:sanitize(titleInput,60)||g.title})); setEditTitle(false); }}
-                  onKeyDown={e=>{ if(e.key==="Enter"){updateActive(g=>({...g,title:sanitize(titleInput,60)||g.title}));setEditTitle(false);}}}
-                  autoFocus maxLength={60} style={{ fontSize:22,fontWeight:800,background:"transparent",border:"none",borderBottom:`2px solid ${T.text}`,borderRadius:0,padding:"4px 0",marginBottom:4,color:T.text }}/>
-              ):(
-                <div onClick={()=>{setTitleInput(active.title);setEditTitle(true);}} style={{ fontSize:22,fontWeight:800,letterSpacing:"-0.5px",marginBottom:2,cursor:"text",color:T.text }}>
-                  {active.title}
+              <div className="row" style={{ gap:12, marginBottom:2 }}>
+                <button onClick={()=>setEditingCover(v=>!v)}
+                  style={{ width:44,height:44,borderRadius:14,background:T.rowBg,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,overflow:"hidden",padding:0 }}>
+                  {active.coverPhoto ? <img src={active.coverPhoto} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}/> : (active.coverEmoji||"🧾")}
+                </button>
+                <div style={{ flex:1 }}>
+                  {editTitle?(
+                    <input value={titleInput} onChange={e=>setTitleInput(e.target.value)}
+                      onBlur={()=>{ updateActive(g=>({...g,title:sanitize(titleInput,60)||g.title})); setEditTitle(false); }}
+                      onKeyDown={e=>{ if(e.key==="Enter"){updateActive(g=>({...g,title:sanitize(titleInput,60)||g.title}));setEditTitle(false);}}}
+                      autoFocus maxLength={60} style={{ fontSize:22,fontWeight:800,background:"transparent",border:"none",borderBottom:`2px solid ${T.text}`,borderRadius:0,padding:"4px 0",color:T.text }}/>
+                  ):(
+                    <div onClick={()=>{setTitleInput(active.title);setEditTitle(true);}} style={{ fontSize:22,fontWeight:800,letterSpacing:"-0.5px",cursor:"text",color:T.text }}>
+                      {active.title}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {editingCover&&(
+                <div className="si" style={{ background:T.rowBg, borderRadius:14, padding:14, marginBottom:12 }}>
+                  <div style={{ display:"flex",flexWrap:"wrap",gap:6, marginBottom:10 }}>
+                    {COVER_EMOJIS.map(e=>(
+                      <button key={e} onClick={()=>{ updateActive(g=>({...g,coverEmoji:e,coverPhoto:null})); setEditingCover(false); }}
+                        style={{ width:34,height:34,borderRadius:10,border:`2px solid ${active.coverEmoji===e&&!active.coverPhoto?T.text:T.border2}`,background:T.surface,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                  <label style={{ display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",border:`1.5px dashed ${T.border2}`,borderRadius:10,cursor:"pointer",fontSize:12,color:T.textSub }}>
+                    📷 Subir foto
+                    <input type="file" accept="image/*" style={{ display:"none" }}
+                      onChange={async e=>{
+                        const file=e.target.files?.[0];
+                        if (!file) return;
+                        try { const url=await uploadReceipt(file); updateActive(g=>({...g,coverPhoto:url})); setEditingCover(false); }
+                        catch {}
+                      }}/>
+                  </label>
                 </div>
               )}
+
               <div className="row" style={{ gap:8, marginBottom:2 }}>
                 <div style={{ fontSize:11,color:T.textMuted,fontFamily:"monospace",letterSpacing:0.5 }}>🔑 {active.id}</div>
                 <button onClick={()=>{ navigator.clipboard?.writeText(active.id).then(()=>{ setCopiedCode(true); setTimeout(()=>setCopiedCode(false),2000); }).catch(()=>{ const ta=document.createElement("textarea");ta.value=active.id;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.focus();ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),2000); }); }}
@@ -1022,7 +1074,14 @@ export default function App() {
                     <div style={{ display:"flex",gap:10 }}>
                       <div style={{ flex:1,position:"relative" }}>
                         <span style={{ position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:14,color:T.textMuted,pointerEvents:"none" }}>{curSymbol}</span>
-                        <input type="number" placeholder="0.00" value={newExp.amount} onChange={e=>setNewExp(x=>({...x,amount:e.target.value}))} style={{ paddingLeft:30 }} min="0" max="999999999999999"/>
+                        <input type="text" inputMode="decimal" placeholder="0.00" value={newExp.amount}
+                          onChange={e=>{
+                            const v = e.target.value.replace(/[^\d.]/g, ""); // solo dígitos y punto
+                            const parts = v.split(".");
+                            const clean = parts.length>2 ? parts[0]+"."+parts.slice(1).join("") : v;
+                            setNewExp(x=>({...x,amount:clean}));
+                          }}
+                          style={{ paddingLeft:30 }}/>
                       </div>
                       <select value={newExp.paidBy} onChange={e=>setNewExp(x=>({...x,paidBy:e.target.value}))} style={{ flex:1 }}>
                         <option value="">{t("whoPaid")}</option>
@@ -1107,6 +1166,9 @@ export default function App() {
                                 {payer&&<Avatar name={payer.name} color={payer.color} bg={payer.bg} size={18}/>}
                                 <span style={{ fontSize:12,color:T.textSub }}>{t("paid")} {payer?.name} · ÷{exp.splitWith.length} = {curSymbol}{share} c/u</span>
                               </div>
+                              {exp.addedByName&&(
+                                <div style={{ fontSize:11,color:T.textMuted,marginTop:2 }}>+ por {exp.addedByName}</div>
+                              )}
                             </div>
                           </div>
                           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
@@ -1148,14 +1210,14 @@ export default function App() {
                             <Avatar name={p.name} color={p.color} bg={p.bg} size={40}/>
                             <div>
                               <div style={{ fontWeight:700,fontSize:15,color:T.text }}>{p.name}</div>
-                              <div style={{ fontSize:12,color:T.textMuted }}>{(active.expenses||[]).filter(e=>e.splitWith.includes(p.id)).length} gastos</div>
+                              <div style={{ fontSize:12,color:T.textMuted }}>{(active.expenses||[]).filter(e=>e.splitWith.includes(p.id)).length} gastos{p.addedByName?` · agregado por ${p.addedByName}`:""}</div>
                             </div>
                           </div>
                           <div className="row" style={{ gap:10 }}>
                             <div style={{ fontWeight:800,fontSize:15,color:bal>0.01?T.green:bal<-0.01?T.orange:T.textMuted }}>
                               {bal>0.01?`+${curSymbol}${fmt(bal)}`:bal<-0.01?`-${curSymbol}${fmt(Math.abs(bal))}`:"✓"}
                             </div>
-                            <button onClick={()=>removePerson(p.id)} style={{ background:"none",border:"none",fontSize:16,color:"#ddd",cursor:"pointer" }}>✕</button>
+                            <button onClick={()=>removePerson(p.id)} style={{ background:"none",border:"none",fontSize:16,color:T.textMuted,cursor:"pointer" }}>✕</button>
                           </div>
                         </div>
                       </motion.div>
@@ -1377,6 +1439,17 @@ export default function App() {
             <div style={{ fontWeight:800,fontSize:20,marginBottom:6,color:T.text }}>{t("newGroupTitle")}</div>
             <div style={{ fontSize:13,color:T.textMuted,marginBottom:20 }}>{t("nameGroup")}</div>
             <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+              <div>
+                <div style={{ fontSize:12,color:T.textMuted,marginBottom:8 }}>Portada:</div>
+                <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+                  {COVER_EMOJIS.map(e=>(
+                    <button key={e} onClick={()=>setNewGroupCover(e)}
+                      style={{ width:38,height:38,borderRadius:12,border:`2px solid ${newGroupCover===e?T.text:T.border2}`,background:newGroupCover===e?T.rowBg:T.surface,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <input placeholder={t("groupNamePlaceholder")} value={newGroupName} onChange={e=>setNewGroupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createGroup()} autoFocus maxLength={60}/>
               <select value={newGroupCur} onChange={e=>setNewGroupCur(e.target.value)}>
                 {CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.symbol} {c.name} ({c.code})</option>)}
